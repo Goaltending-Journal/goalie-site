@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Goalie Analyst</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+[hidden]{display:none!important}
+/* Layout: arena-dark broadcast board. Top bar, season leaders rail, chart deck (each panel hideable), full sortable goalie table, slide-in profile. */
+:root{
+  color-scheme: dark;
+  --ice: #070a0f;          /* page ground, below the ice */
+  --boards: #0d121a;       /* panels */
+  --glass: #131a24;        /* raised rows, inputs */
+  --line: #1f2a38;         /* hairlines */
+  --chalk: #e6edf5;        /* primary text */
+  --fog: #8796a8;          /* secondary text */
+  --mute: #566477;         /* tertiary */
+  --crease: #4fb6ff;       /* accent: crease blue */
+  --crease-dim: rgba(79,182,255,.14);
+  --good: #3ddc97;
+  --bad: #ff5d6c;
+  --warn: #ffc65c;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --f-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 10px;
+}
+*{box-sizing:border-box}
+html,body{background:var(--ice);color:var(--chalk)}
+body{font-family:var(--f-body);font-size:14px;line-height:1.5;padding-inline:clamp(16px,3vw,40px);padding-block:0 48px;-webkit-font-smoothing:antialiased}
+a{color:var(--crease);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--crease);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1320px;margin-inline:auto;display:flex;flex-direction:column;gap:28px}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;margin-inline:calc(-1*clamp(16px,3vw,40px));padding:12px clamp(16px,3vw,40px);background:rgba(7,10,15,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1320px;margin-inline:auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.04em;text-transform:uppercase}
+.brand svg{flex:none}
+.brand small{font-family:var(--f-body);font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--fog);text-transform:uppercase;border-left:1px solid var(--line);padding-left:10px}
+.seg{display:inline-flex;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;padding:6px 14px;border-radius:999px;cursor:pointer;color:var(--fog);font-weight:600;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--crease);color:#04121f}
+.spacer{flex:1}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:var(--fog);font-size:13px;font-weight:600;user-select:none}
+.switch input{appearance:none;width:34px;height:20px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;transition:background .2s;margin:0}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--chalk);transition:transform .2s}
+.switch input:checked{background:var(--crease)}
+.switch input:checked::after{transform:translateX(14px)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:end;padding-top:28px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--crease)}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(40px,6vw,72px);line-height:.92;letter-spacing:.01em;text-transform:uppercase;margin:8px 0 12px;text-wrap:balance}
+h1 span{color:var(--fog)}
+.lede{color:var(--fog);max-width:60ch;margin:0}
+.spot{background:linear-gradient(140deg,var(--boards),var(--ice));border:1px solid var(--line);border-radius:var(--r);padding:20px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;cursor:pointer;position:relative;overflow:hidden}
+.spot::before{content:"";position:absolute;inset:auto -40px -60px auto;width:220px;height:220px;border-radius:50%;border:1px solid var(--crease-dim)}
+.spot .tag{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--fog)}
+.spot .nm{font-family:var(--f-display);font-weight:700;font-size:30px;line-height:1;text-transform:uppercase;margin:4px 0 10px}
+.spot .stats{display:flex;gap:22px;flex-wrap:wrap}
+.kv b{display:block;font-family:var(--f-display);font-size:26px;line-height:1;font-weight:600}
+.kv span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700}
+
+.mono{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:24px;color:#fff;flex:none;position:relative;box-shadow:inset 0 0 0 2px rgba(255,255,255,.08)}
+.mono.sm{width:30px;height:30px;font-size:13px}
+.mono.lg{width:84px;height:84px;font-size:32px}
+
+/* section heads */
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:10px}
+h2{font-family:var(--f-display);font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.03em;margin:0}
+.note{color:var(--mute);font-size:12px}
+
+/* leaders */
+.leaders{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.lead{background:var(--boards);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.lead h3{margin:0;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--fog);display:flex;justify-content:space-between}
+.lead .first{display:flex;align-items:center;gap:12px;cursor:pointer}
+.lead .first .v{font-family:var(--f-display);font-size:40px;line-height:1;font-weight:700;color:var(--crease)}
+.lead .first .n{font-weight:700;line-height:1.2}
+.lead .first .t{font-size:12px;color:var(--mute)}
+.lead ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.lead li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid rgba(31,42,56,.5);cursor:pointer;font-size:13px}
+.lead li:last-child{border-bottom:0}
+.lead li .r{color:var(--mute);width:18px;display:inline-block}
+.lead li:hover .nm2{color:var(--crease)}
+.lead li .nm2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* charts */
+.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.panel{background:var(--boards);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.panel.wide{grid-column:1/-1}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.panel-h h3{margin:0;font-family:var(--f-display);font-size:19px;text-transform:uppercase;letter-spacing:.03em}
+.panel-h p{margin:0;color:var(--mute);font-size:12px}
+.hidebtn{border:1px solid var(--line);background:var(--glass);color:var(--fog);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.hidebtn:hover{color:var(--chalk);border-color:var(--mute)}
+.chart{width:100%;position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font-family:var(--f-body);fill:var(--fog);font-size:11px}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.chart .ax{fill:var(--mute);font-size:10px;letter-spacing:.06em}
+.dot{cursor:pointer;transition:opacity .15s}
+.dot:hover{stroke:var(--chalk);stroke-width:2}
+.collapsed{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--mute);font-size:12px}
+.collapsed button{border:1px dashed var(--line);background:transparent;color:var(--fog);border-radius:999px;padding:4px 12px;font-size:12px;cursor:pointer}
+.tip{position:fixed;pointer-events:none;z-index:50;background:var(--glass);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:240px}
+.tip b{display:block;font-size:13px}
+
+/* filters + table */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.field{display:flex;align-items:center;gap:8px;background:var(--glass);border:1px solid var(--line);border-radius:8px;padding:0 10px;height:36px}
+.field input,.field select{background:transparent;border:0;outline:0;height:34px;min-width:0}
+.field select option{background:var(--glass)}
+.field label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;white-space:nowrap}
+.field input[type=range]{accent-color:var(--crease);width:110px}
+#q{width:180px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--boards)}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{padding:10px 12px;text-align:right;white-space:nowrap}
+th{position:sticky;top:0;background:var(--boards);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;cursor:pointer;user-select:none;border-bottom:1px solid var(--line)}
+th:hover{color:var(--chalk)}
+th[aria-sort] {color:var(--crease)}
+th[aria-sort="ascending"]::after{content:" ▲";font-size:9px}
+th[aria-sort="descending"]::after{content:" ▼";font-size:9px}
+th.l,td.l{text-align:left}
+td{border-bottom:1px solid rgba(31,42,56,.6);font-family:var(--f-data);font-size:13px}
+td.l{font-family:var(--f-body)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--glass)}
+tbody tr:last-child td{border-bottom:0}
+.who{display:flex;align-items:center;gap:10px}
+.who b{font-weight:700}
+.who small{display:block;color:var(--mute);font-size:11px}
+.pill{display:inline-block;font-family:var(--f-body);font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--glass);border:1px solid var(--line);color:var(--fog)}
+.bar{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+.bar i{display:inline-block;height:6px;border-radius:3px;background:var(--crease);opacity:.75}
+.good{color:var(--good)} .bad{color:var(--bad)}
+.empty{padding:28px;text-align:center;color:var(--mute)}
+
+/* profile drawer */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--boards);border-left:1px solid var(--line);z-index:41;overflow-y:auto;padding:calc(20px + env(safe-area-inset-top,0px)) 22px calc(28px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:20px}
+.dr-h{display:flex;gap:16px;align-items:center}
+.dr-h h2{font-size:32px;line-height:1}
+.dr-h .sub{color:var(--fog);font-size:13px;margin-top:4px}
+.close{margin-left:auto;align-self:flex-start;border:1px solid var(--line);background:var(--glass);border-radius:50%;width:34px;height:34px;cursor:pointer;color:var(--fog);font-size:18px;line-height:1;flex:none}
+.bio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.bio div{background:var(--ice);padding:10px 12px}
+.bio span{display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700}
+.bio b{font-weight:600}
+.dr-sec h4{margin:0 0 8px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--fog)}
+.mini{width:100%;border-collapse:collapse;min-width:0}
+.mini th,.mini td{padding:7px 6px;font-size:12px}
+.mini th{position:static;cursor:default;background:transparent}
+.mini th:hover{color:var(--mute)}
+.xcheck{font-size:13px;color:var(--fog);background:var(--ice);border:1px solid var(--line);border-radius:8px;padding:12px}
+.links{display:flex;gap:10px;flex-wrap:wrap}
+.links a{border:1px solid var(--line);background:var(--glass);padding:7px 12px;border-radius:8px;font-weight:600;font-size:13px}
+
+footer{border-top:1px solid var(--line);padding-top:18px;color:var(--mute);font-size:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+footer h4{margin:0 0 6px;color:var(--fog);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+footer p{margin:0 0 6px;max-width:60ch}
+
+@media (max-width:960px){
+  .hero{grid-template-columns:1fr}
+  .leaders{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .charts{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .leaders{grid-template-columns:1fr}
+  .brand small{display:none}
+  #q{width:130px}
+  .bio{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .spot{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M3 22 V10 a11 11 0 0 1 22 0 V22" fill="none" stroke="#4fb6ff" stroke-width="2.4"/><path d="M8 22 a6 6 0 0 1 12 0" fill="rgba(79,182,255,.25)" stroke="#4fb6ff" stroke-width="1.6"/></svg>
+      Goalie Analyst <small>NHL Goaltending</small>
+    </div>
+    <div class="seg" role="group" aria-label="Season" id="seasonSeg"></div>
+    <span class="spacer"></span>
+    <label class="switch" for="gfx"><input type="checkbox" id="gfx" checked> Show graphics</label>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <div class="eyebrow" id="heroEyebrow"></div>
+      <h1>Every NHL goalie. <span>Every save.</span></h1>
+      <p class="lede" id="heroLede"></p>
+    </div>
+    <div class="spot" id="spot" tabindex="0" role="button" aria-label="Open spotlight goalie"></div>
+  </section>
+
+  <section>
+    <div class="sec-h"><h2>League leaders</h2><span class="note" id="leadNote"></span></div>
+    <div class="leaders" id="leaders" style="margin-top:14px"></div>
+  </section>
+
+  <section id="chartSec">
+    <div class="sec-h"><h2>Visualizers</h2><span class="note">Hide any chart, or switch all graphics off in the top bar.</span></div>
+    <div class="collapsed" id="collapsed" style="margin-top:12px" hidden></div>
+    <div class="charts" id="charts" style="margin-top:14px">
+      <div class="panel wide" data-chart="scatter">
+        <div class="panel-h"><div><h3>Save % vs goals-against</h3><p>Top right is best. Bubble size is games played. Hover for detail, click to open.</p></div><button class="hidebtn" data-hide="scatter">Hide</button></div>
+        <div class="chart" id="c-scatter"></div>
+      </div>
+      <div class="panel" data-chart="svbar">
+        <div class="panel-h"><div><h3>Save % ladder</h3><p>Top 12 qualified goalies; dashed line is the league rate.</p></div><button class="hidebtn" data-hide="svbar">Hide</button></div>
+        <div class="chart" id="c-svbar"></div>
+      </div>
+      <div class="panel" data-chart="workload">
+        <div class="panel-h"><div><h3>Workload</h3><p>Shots faced, split into saves and goals against. Top 12.</p></div><button class="hidebtn" data-hide="workload">Hide</button></div>
+        <div class="chart" id="c-workload"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h"><h2>All goaltenders</h2><span class="note" id="countNote"></span></div>
+    <div class="filters" style="margin-block:14px">
+      <div class="field"><label for="q">Search</label><input id="q" type="search" placeholder="Name"></div>
+      <div class="field"><label for="team">Team</label><select id="team"><option value="">All teams</option></select></div>
+      <div class="field"><label for="catch">Catches</label><select id="catch"><option value="">Both</option><option value="L">Left</option><option value="R">Right</option></select></div>
+      <div class="field"><label for="mingp">Min GP</label><input id="mingp" type="range" min="0" max="40" step="1" value="0"><span class="num" id="mingpV" style="width:22px">0</span></div>
+    </div>
+    <div class="tbl-wrap">
+      <table id="tbl"><thead><tr></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+
+<div class="tip" id="tip" hidden></div>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-modal="true" role="dialog" aria-labelledby="drName"></aside>
+
+<script>
+const DATA = {"asOf":"2026-10-13","goalies":[{"id":8482515,"name":"Artur Akhtyamov","team":"TOR","catches":"L","born":"2001-10-31","nat":"RUS","ht":74,"wt":176,"draft":"2020 · Rd 4 · #106","ingoal":"https://ingoalmag.com/goaltenders/artur-akhtyamov/","seasons":{"2025-26":{"team":"TOR","gp":3,"w":0,"l":2,"otl":0,"gaa":5.24,"svp":0.877,"so":0,"gs":2,"ga":11,"sv":71,"sa":81,"toi":7560}},"qh":null},{"id":8474596,"name":"Jake Allen","team":"NJD","catches":"L","born":"1990-08-07","nat":"CAN","ht":74,"wt":197,"draft":"2008 · Rd 2 · #34","ingoal":"https://ingoalmag.com/goaltenders/jake-allen/","seasons":{"2024-25":{"team":"NJD","gp":31,"w":13,"l":16,"otl":1,"gaa":2.66,"svp":0.908,"so":4},"2025-26":{"team":"NJD","gp":37,"w":17,"l":17,"otl":2,"gaa":2.74,"svp":0.904,"so":1,"gs":36,"ga":100,"sv":932,"sa":1031,"toi":131194},"2026-27":{"team":"NJD","gp":2,"w":1,"l":1,"otl":0,"gaa":3.47,"svp":0.875,"so":0,"gs":2,"ga":7,"sv":49,"sa":56,"toi":7252}},"qh":{"gp":3,"gaa":2.65,"svp":0.896,"team":"NJD"}},{"id":8475883,"name":"Frederik Andersen","team":"EDM","catches":"L","born":"1989-10-02","nat":"DNK","ht":76,"wt":229,"draft":"2012 · Rd 3 · #87","ingoal":"https://ingoalmag.com/goaltenders/frederik-andersen/","seasons":{"2024-25":{"team":"CAR","gp":22,"w":13,"l":8,"otl":1,"gaa":2.5,"svp":0.899,"so":1},"2025-26":{"team":"CAR","gp":35,"w":16,"l":14,"otl":5,"gaa":3.05,"svp":0.874,"so":0,"gs":35,"ga":107,"sv":742,"sa":849,"toi":126112}},"qh":null},{"id":8481020,"name":"Justus Annunen","team":"NSH","catches":"L","born":"2000-03-11","nat":"FIN","ht":76,"wt":210,"draft":"2018 · Rd 3 · #64","ingoal":"https://ingoalmag.com/goaltenders/justus-annunen/","seasons":{"2024-25":{"team":"COL,NSH","gp":34,"w":15,"l":15,"otl":1,"gaa":3.18,"svp":0.883,"so":0},"2025-26":{"team":"NSH","gp":28,"w":10,"l":12,"otl":2,"gaa":2.68,"svp":0.907,"so":1,"gs":23,"ga":67,"sv":645,"sa":711,"toi":90032}},"qh":null},{"id":8482137,"name":"Yaroslav Askarov","team":"SJS","catches":"R","born":"2002-06-16","nat":"RUS","ht":75,"wt":180,"draft":"2020 · Rd 1 · #11","ingoal":"https://ingoalmag.com/goaltenders/yaroslav-askarov/","seasons":{"2024-25":{"team":"SJS","gp":13,"w":4,"l":6,"otl":2,"gaa":3.1,"svp":0.896,"so":0},"2025-26":{"team":"SJS","gp":47,"w":21,"l":20,"otl":4,"gaa":3.63,"svp":0.884,"so":0,"gs":47,"ga":157,"sv":1185,"sa":1341,"toi":155789},"2026-27":{"team":"SJS","gp":3,"w":2,"l":1,"otl":0,"gaa":3.86,"svp":0.862,"so":0,"gs":3,"ga":12,"sv":75,"sa":87,"toi":11181}},"qh":{"gp":4,"gaa":3.71,"svp":0.86,"team":"SJS"}},{"id":8476412,"name":"Jordan Binnington","team":"STL","catches":"L","born":"1993-07-11","nat":"CAN","ht":74,"wt":172,"draft":"2011 · Rd 3 · #88","ingoal":"https://ingoalmag.com/goaltenders/jordan-binnington/","seasons":{"2024-25":{"team":"STL","gp":56,"w":28,"l":22,"otl":5,"gaa":2.69,"svp":0.9,"so":3},"2025-26":{"team":"STL","gp":41,"w":13,"l":20,"otl":7,"gaa":3.33,"svp":0.873,"so":1,"gs":39,"ga":128,"sv":882,"sa":1010,"toi":138468},"2026-27":{"team":"STL","gp":1,"w":0,"l":1,"otl":0,"gaa":6.0,"svp":0.833,"so":0,"gs":1,"ga":6,"sv":30,"sa":36,"toi":3600}},"qh":null},{"id":8478406,"name":"Mackenzie Blackwood","team":"COL","catches":"L","born":"1996-12-09","nat":"CAN","ht":76,"wt":225,"draft":"2015 · Rd 2 · #42","ingoal":"https://ingoalmag.com/goaltenders/mackenzie-blackwood/","seasons":{"2024-25":{"team":"SJS,COL","gp":56,"w":28,"l":21,"otl":6,"gaa":2.55,"svp":0.912,"so":4},"2025-26":{"team":"COL","gp":39,"w":23,"l":10,"otl":2,"gaa":2.5,"svp":0.904,"so":3,"gs":36,"ga":90,"sv":843,"sa":933,"toi":129341},"2026-27":{"team":"COL","gp":3,"w":2,"l":1,"otl":0,"gaa":2.68,"svp":0.895,"so":0,"gs":3,"ga":8,"sv":68,"sa":76,"toi":10753}},"qh":{"gp":4,"gaa":3.3,"svp":0.867,"team":"COL"}},{"id":8475683,"name":"Sergei Bobrovsky","team":"TOR","catches":"L","born":"1988-09-20","nat":"RUS","ht":74,"wt":187,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/sergei-bobrovsky/","seasons":{"2024-25":{"team":"FLA","gp":54,"w":33,"l":19,"otl":2,"gaa":2.44,"svp":0.906,"so":5},"2025-26":{"team":"FLA","gp":52,"w":27,"l":23,"otl":1,"gaa":3.07,"svp":0.877,"so":4,"gs":51,"ga":154,"sv":1096,"sa":1250,"toi":180579},"2026-27":{"team":"TOR","gp":2,"w":0,"l":2,"otl":0,"gaa":3.06,"svp":0.887,"so":0,"gs":2,"ga":6,"sv":47,"sa":53,"toi":7055}},"qh":{"gp":4,"gaa":2.97,"svp":0.907,"team":"TOR"}},{"id":8476316,"name":"Laurent Brossoit","team":"ANA","catches":"L","born":"1993-03-23","nat":"CAN","ht":74,"wt":217,"draft":"2011 · Rd 6 · #164","ingoal":"https://ingoalmag.com/goaltenders/laurent-brossoit/","seasons":{"2025-26":{"team":"SJS","gp":1,"w":0,"l":1,"otl":0,"gaa":6.09,"svp":0.783,"so":0,"gs":1,"ga":6,"sv":18,"sa":23,"toi":3549}},"qh":null},{"id":8483548,"name":"Brandon Bussi","team":"CAR","catches":"R","born":"1998-06-25","nat":"USA","ht":76,"wt":218,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/brandon-bussi/","seasons":{"2025-26":{"team":"CAR","gp":39,"w":31,"l":6,"otl":2,"gaa":2.47,"svp":0.895,"so":2,"gs":39,"ga":97,"sv":816,"sa":912,"toi":141649},"2026-27":{"team":"CAR","gp":3,"w":1,"l":1,"otl":1,"gaa":3.24,"svp":0.851,"so":0,"gs":3,"ga":10,"sv":57,"sa":67,"toi":11095}},"qh":{"gp":4,"gaa":2.95,"svp":0.871,"team":"CAR"}},{"id":8483746,"name":"Vyacheslav Buteyets","team":"ANA","catches":"L","born":"2002-05-29","nat":"RUS","ht":76,"wt":220,"draft":"2022 · Rd 6 · #178","ingoal":"https://ingoalmag.com/goaltenders/vyacheslav-buteyets/","seasons":{"2025-26":{"team":"ANA","gp":1,"w":0,"l":0,"otl":0,"gaa":9.0,"svp":0.769,"so":0,"gs":0,"ga":3,"sv":10,"sa":13,"toi":1200}},"qh":null},{"id":8482123,"name":"Drew Commesso","team":"CHI","catches":"L","born":"2002-07-19","nat":"USA","ht":74,"wt":190,"draft":"2020 · Rd 2 · #46","ingoal":"https://ingoalmag.com/goaltenders/drew-commesso/","seasons":{"2024-25":{"team":"CHI","gp":2,"w":0,"l":1,"otl":0,"gaa":3.36,"svp":0.846,"so":0},"2025-26":{"team":"CHI","gp":3,"w":2,"l":1,"otl":0,"gaa":2.31,"svp":0.918,"so":1,"gs":3,"ga":7,"sv":78,"sa":85,"toi":10903}},"qh":null},{"id":8477480,"name":"Eric Comrie","team":"SJS","catches":"L","born":"1995-07-06","nat":"CAN","ht":73,"wt":190,"draft":"2013 · Rd 2 · #59","ingoal":"https://ingoalmag.com/goaltenders/eric-comrie/","seasons":{"2024-25":{"team":"WPG","gp":20,"w":9,"l":10,"otl":1,"gaa":2.39,"svp":0.914,"so":2},"2025-26":{"team":"WPG","gp":25,"w":12,"l":11,"otl":1,"gaa":3.13,"svp":0.89,"so":0,"gs":24,"ga":72,"sv":582,"sa":654,"toi":82890}},"qh":null},{"id":8482445,"name":"Devin Cooley","team":"CGY","catches":"L","born":"1997-05-25","nat":"USA","ht":77,"wt":192,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/devin-cooley/","seasons":{"2025-26":{"team":"CGY","gp":31,"w":10,"l":10,"otl":6,"gaa":2.69,"svp":0.909,"so":0,"gs":26,"ga":77,"sv":770,"sa":847,"toi":103080},"2026-27":{"team":"CGY","gp":1,"w":0,"l":1,"otl":0,"gaa":3.01,"svp":0.88,"so":0,"gs":1,"ga":3,"sv":22,"sa":25,"toi":3586}},"qh":{"gp":2,"gaa":5.01,"svp":0.818,"team":"CGY"}},{"id":8477831,"name":"Pheonix Copley","team":"CBJ","catches":"L","born":"1992-01-18","nat":"USA","ht":76,"wt":205,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/pheonix-copley/","seasons":{"2025-26":{"team":"LAK","gp":1,"w":0,"l":1,"otl":0,"gaa":3.07,"svp":0.893,"so":0,"gs":1,"ga":3,"sv":25,"sa":28,"toi":3514}},"qh":null},{"id":8482657,"name":"Sebastian Cossa","team":"UTA","catches":"L","born":"2002-11-21","nat":"CAN","ht":78,"wt":221,"draft":"2021 · Rd 1 · #15","ingoal":"https://ingoalmag.com/goaltenders/sebastian-cossa/","seasons":{"2026-27":{"team":"UTA","gp":1,"w":1,"l":0,"otl":0,"gaa":1.0,"svp":0.947,"so":0,"gs":1,"ga":1,"sv":18,"sa":19,"toi":3600}},"qh":{"gp":2,"gaa":3.16,"svp":0.852,"team":"UTA"}},{"id":8478916,"name":"Joey Daccord","team":"SEA","catches":"L","born":"1996-08-19","nat":"USA","ht":74,"wt":201,"draft":"2015 · Rd 7 · #199","ingoal":"https://ingoalmag.com/goaltenders/joey-daccord/","seasons":{"2024-25":{"team":"SEA","gp":57,"w":27,"l":23,"otl":5,"gaa":2.75,"svp":0.906,"so":2},"2025-26":{"team":"SEA","gp":47,"w":20,"l":20,"otl":6,"gaa":3.03,"svp":0.897,"so":2,"gs":46,"ga":136,"sv":1173,"sa":1307,"toi":161593},"2026-27":{"team":"SEA","gp":3,"w":2,"l":1,"otl":0,"gaa":2.64,"svp":0.911,"so":0,"gs":3,"ga":7,"sv":72,"sa":79,"toi":9563}},"qh":{"gp":4,"gaa":2.74,"svp":0.913,"team":"SEA"}},{"id":8482076,"name":"Nico Daws","team":"NJD","catches":"L","born":"2000-12-22","nat":"CAN","ht":76,"wt":205,"draft":"2020 · Rd 3 · #84","ingoal":"https://ingoalmag.com/goaltenders/nico-daws/","seasons":{"2024-25":{"team":"NJD","gp":6,"w":3,"l":1,"otl":0,"gaa":1.6,"svp":0.939,"so":1},"2025-26":{"team":"NJD","gp":3,"w":2,"l":1,"otl":0,"gaa":2.62,"svp":0.908,"so":0,"gs":3,"ga":8,"sv":79,"sa":87,"toi":10996},"2026-27":{"team":"NJD","gp":1,"w":0,"l":1,"otl":0,"gaa":6.01,"svp":0.812,"so":0,"gs":1,"ga":6,"sv":26,"sa":32,"toi":3592}},"qh":{"gp":2,"gaa":4.58,"svp":0.824,"team":"NJD"}},{"id":8479193,"name":"Casey DeSmith","team":"DAL","catches":"L","born":"1991-08-13","nat":"USA","ht":72,"wt":188,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/casey-desmith/","seasons":{"2024-25":{"team":"DAL","gp":27,"w":14,"l":8,"otl":2,"gaa":2.59,"svp":0.915,"so":2},"2025-26":{"team":"DAL","gp":30,"w":15,"l":8,"otl":6,"gaa":2.43,"svp":0.907,"so":1,"gs":28,"ga":71,"sv":689,"sa":760,"toi":105300},"2026-27":{"team":"DAL","gp":1,"w":0,"l":1,"otl":0,"gaa":2.05,"svp":0.923,"so":0,"gs":1,"ga":2,"sv":24,"sa":26,"toi":3504}},"qh":{"gp":1,"gaa":2.06,"svp":0.923,"team":"DAL"}},{"id":8477967,"name":"Thatcher Demko","team":"VAN","catches":"L","born":"1995-12-08","nat":"USA","ht":76,"wt":192,"draft":"2014 · Rd 2 · #36","ingoal":"https://ingoalmag.com/goaltenders/thatcher-demko/","seasons":{"2024-25":{"team":"VAN","gp":23,"w":10,"l":8,"otl":3,"gaa":2.9,"svp":0.889,"so":1},"2025-26":{"team":"VAN","gp":20,"w":8,"l":10,"otl":1,"gaa":2.9,"svp":0.897,"so":1,"gs":20,"ga":54,"sv":461,"sa":514,"toi":66952}},"qh":null},{"id":8480022,"name":"Michael DiPietro","team":"BOS","catches":"L","born":"1999-06-09","nat":"CAN","ht":73,"wt":207,"draft":"2017 · Rd 3 · #64","ingoal":"https://ingoalmag.com/goaltenders/michael-dipietro/","seasons":{"2025-26":{"team":"BOS","gp":1,"w":0,"l":0,"otl":0,"gaa":0.0,"svp":1.0,"so":0,"gs":0,"ga":0,"sv":2,"sa":2,"toi":363},"2026-27":{"team":"BOS","gp":1,"w":0,"l":1,"otl":0,"gaa":3.11,"svp":0.897,"so":0,"gs":1,"ga":3,"sv":26,"sa":29,"toi":3473}},"qh":{"gp":1,"gaa":3.11,"svp":0.897,"team":"BOS"}},{"id":8482487,"name":"Jakub Dobes","team":"MTL","catches":"L","born":"2001-05-27","nat":"CZE","ht":76,"wt":215,"draft":"2020 · Rd 5 · #136","ingoal":"https://ingoalmag.com/goaltenders/jakub-dobes/","seasons":{"2024-25":{"team":"MTL","gp":16,"w":7,"l":4,"otl":3,"gaa":2.74,"svp":0.909,"so":1},"2025-26":{"team":"MTL","gp":43,"w":29,"l":10,"otl":4,"gaa":2.78,"svp":0.901,"so":0,"gs":42,"ga":117,"sv":1070,"sa":1187,"toi":151535},"2026-27":{"team":"MTL","gp":3,"w":1,"l":1,"otl":1,"gaa":4.43,"svp":0.856,"so":0,"gs":3,"ga":13,"sv":77,"sa":90,"toi":10553}},"qh":{"gp":3,"gaa":4.43,"svp":0.856,"team":"MTL"}},{"id":8480843,"name":"Lukas Dostal","team":"ANA","catches":"L","born":"2000-06-22","nat":"CZE","ht":74,"wt":190,"draft":"2018 · Rd 3 · #85","ingoal":"https://ingoalmag.com/goaltenders/lukas-dostal/","seasons":{"2024-25":{"team":"ANA","gp":54,"w":23,"l":23,"otl":7,"gaa":3.1,"svp":0.903,"so":1},"2025-26":{"team":"ANA","gp":56,"w":30,"l":20,"otl":4,"gaa":3.1,"svp":0.888,"so":0,"gs":55,"ga":169,"sv":1344,"sa":1513,"toi":196076},"2026-27":{"team":"ANA","gp":2,"w":2,"l":0,"otl":0,"gaa":2.42,"svp":0.918,"so":0,"gs":2,"ga":5,"sv":56,"sa":61,"toi":7423}},"qh":{"gp":4,"gaa":2.95,"svp":0.884,"team":"ANA"}},{"id":8481551,"name":"Colten Ellis","team":"BUF","catches":"L","born":"2000-10-05","nat":"CAN","ht":73,"wt":194,"draft":"2019 · Rd 3 · #93","ingoal":"https://ingoalmag.com/goaltenders/colten-ellis/","seasons":{"2025-26":{"team":"BUF","gp":16,"w":8,"l":4,"otl":2,"gaa":2.9,"svp":0.903,"so":1,"gs":14,"ga":44,"sv":411,"sa":455,"toi":54680},"2026-27":{"team":"BUF","gp":1,"w":1,"l":0,"otl":0,"gaa":1.86,"svp":0.9,"so":0,"gs":1,"ga":2,"sv":18,"sa":20,"toi":3862}},"qh":{"gp":3,"gaa":3.19,"svp":0.864,"team":"BUF"}},{"id":8481035,"name":"Samuel Ersson","team":"OTT","catches":"L","born":"1999-10-20","nat":"SWE","ht":75,"wt":194,"draft":"2018 · Rd 5 · #143","ingoal":"https://ingoalmag.com/goaltenders/samuel-ersson/","seasons":{"2024-25":{"team":"PHI","gp":47,"w":22,"l":17,"otl":5,"gaa":3.14,"svp":0.883,"so":2},"2025-26":{"team":"PHI","gp":33,"w":14,"l":11,"otl":5,"gaa":3.12,"svp":0.87,"so":0,"gs":29,"ga":97,"sv":647,"sa":744,"toi":111995},"2026-27":{"team":"OTT","gp":2,"w":0,"l":1,"otl":0,"gaa":3.85,"svp":0.886,"so":0,"gs":1,"ga":5,"sv":39,"sa":44,"toi":4676}},"qh":{"gp":2,"gaa":3.85,"svp":0.886,"team":"OTT"}},{"id":8476341,"name":"Anton Forsberg","team":"LAK","catches":"L","born":"1992-11-27","nat":"SWE","ht":75,"wt":200,"draft":"2011 · Rd 7 · #188","ingoal":"https://ingoalmag.com/goaltenders/anton-forsberg/","seasons":{"2024-25":{"team":"OTT","gp":30,"w":11,"l":12,"otl":3,"gaa":2.72,"svp":0.901,"so":3},"2025-26":{"team":"LAK","gp":36,"w":16,"l":12,"otl":5,"gaa":2.57,"svp":0.91,"so":3,"gs":31,"ga":87,"sv":866,"sa":952,"toi":121926},"2026-27":{"team":"LAK","gp":1,"w":0,"l":0,"otl":1,"gaa":4.77,"svp":0.8,"so":0,"gs":1,"ga":5,"sv":20,"sa":25,"toi":3772}},"qh":{"gp":1,"gaa":4.77,"svp":0.8,"team":"LAK"}},{"id":8484170,"name":"Jacob Fowler","team":"MTL","catches":"L","born":"2004-11-24","nat":"USA","ht":73,"wt":223,"draft":"2023 · Rd 3 · #69","ingoal":"https://ingoalmag.com/goaltenders/jacob-fowler/","seasons":{"2025-26":{"team":"MTL","gp":17,"w":9,"l":6,"otl":2,"gaa":2.43,"svp":0.908,"so":1,"gs":17,"ga":41,"sv":407,"sa":448,"toi":60642}},"qh":{"gp":2,"gaa":1.46,"svp":0.938,"team":"MTL"}},{"id":8482193,"name":"Dylan Garand","team":"NYR","catches":"L","born":"2002-06-07","nat":"CAN","ht":73,"wt":182,"draft":"2020 · Rd 4 · #103","ingoal":"https://ingoalmag.com/goaltenders/dylan-garand/","seasons":{"2025-26":{"team":"NYR","gp":3,"w":2,"l":0,"otl":1,"gaa":1.62,"svp":0.948,"so":0,"gs":3,"ga":5,"sv":91,"sa":96,"toi":11100},"2026-27":{"team":"NYR","gp":1,"w":1,"l":0,"otl":0,"gaa":0.0,"svp":1.0,"so":1,"gs":1,"ga":0,"sv":22,"sa":22,"toi":3600}},"qh":{"gp":3,"gaa":1.2,"svp":0.945,"team":"NYR"}},{"id":8476434,"name":"John Gibson","team":"DET","catches":"L","born":"1993-07-14","nat":"USA","ht":75,"wt":209,"draft":"2011 · Rd 2 · #39","ingoal":"https://ingoalmag.com/goaltenders/john-gibson/","seasons":{"2024-25":{"team":"ANA","gp":29,"w":11,"l":11,"otl":2,"gaa":2.77,"svp":0.912,"so":0},"2025-26":{"team":"DET","gp":57,"w":29,"l":22,"otl":4,"gaa":2.72,"svp":0.901,"so":4,"gs":57,"ga":144,"sv":1317,"sa":1461,"toi":190874},"2026-27":{"team":"DET","gp":3,"w":1,"l":2,"otl":0,"gaa":2.38,"svp":0.903,"so":0,"gs":3,"ga":7,"sv":65,"sa":72,"toi":10567}},"qh":{"gp":4,"gaa":3.42,"svp":0.862,"team":"DET"}},{"id":8482982,"name":"Jet Greaves","team":"CBJ","catches":"L","born":"2001-03-30","nat":"CAN","ht":72,"wt":192,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/jet-greaves/","seasons":{"2024-25":{"team":"CBJ","gp":11,"w":7,"l":2,"otl":2,"gaa":1.91,"svp":0.938,"so":2},"2025-26":{"team":"CBJ","gp":55,"w":26,"l":19,"otl":9,"gaa":2.6,"svp":0.908,"so":2,"gs":53,"ga":142,"sv":1397,"sa":1539,"toi":196566},"2026-27":{"team":"CBJ","gp":2,"w":1,"l":1,"otl":0,"gaa":3.5,"svp":0.877,"so":0,"gs":2,"ga":7,"sv":50,"sa":57,"toi":7200}},"qh":{"gp":3,"gaa":3.69,"svp":0.867,"team":"CBJ"}},{"id":8475831,"name":"Philipp Grubauer","team":"SEA","catches":"L","born":"1991-11-25","nat":"DEU","ht":73,"wt":188,"draft":"2010 · Rd 4 · #112","ingoal":"https://ingoalmag.com/goaltenders/philipp-grubauer/","seasons":{"2024-25":{"team":"SEA","gp":26,"w":8,"l":17,"otl":1,"gaa":3.49,"svp":0.875,"so":0},"2025-26":{"team":"SEA","gp":32,"w":13,"l":12,"otl":4,"gaa":2.65,"svp":0.909,"so":0,"gs":28,"ga":79,"sv":787,"sa":866,"toi":107466},"2026-27":{"team":"SEA","gp":2,"w":0,"l":1,"otl":0,"gaa":2.28,"svp":0.906,"so":0,"gs":1,"ga":3,"sv":29,"sa":32,"toi":4746}},"qh":{"gp":3,"gaa":2.59,"svp":0.917,"team":"SEA"}},{"id":8479406,"name":"Filip Gustavsson","team":"MIN","catches":"L","born":"1998-06-07","nat":"SWE","ht":74,"wt":184,"draft":"2016 · Rd 2 · #55","ingoal":"https://ingoalmag.com/goaltenders/filip-gustavsson/","seasons":{"2024-25":{"team":"MIN","gp":58,"w":31,"l":19,"otl":6,"gaa":2.56,"svp":0.914,"so":5},"2025-26":{"team":"MIN","gp":50,"w":28,"l":15,"otl":6,"gaa":2.69,"svp":0.904,"so":4,"gs":49,"ga":133,"sv":1245,"sa":1377,"toi":178075}},"qh":null},{"id":8477990,"name":"Brandon Halverson","team":"DAL","catches":"L","born":"1996-03-29","nat":"USA","ht":77,"wt":235,"draft":"2014 · Rd 2 · #59","ingoal":"https://ingoalmag.com/goaltenders/brandon-halverson/","seasons":{"2025-26":{"team":"TBL","gp":2,"w":0,"l":1,"otl":0,"gaa":4.22,"svp":0.81,"so":0,"gs":1,"ga":4,"sv":17,"sa":21,"toi":3413}},"qh":null},{"id":8479394,"name":"Carter Hart","team":"VGK","catches":"L","born":"1998-08-13","nat":"CAN","ht":74,"wt":196,"draft":"2016 · Rd 2 · #48","ingoal":"https://ingoalmag.com/goaltenders/carter-hart/","seasons":{"2025-26":{"team":"VGK","gp":18,"w":11,"l":3,"otl":3,"gaa":2.71,"svp":0.891,"so":0,"gs":18,"ga":46,"sv":376,"sa":422,"toi":61187},"2026-27":{"team":"VGK","gp":3,"w":2,"l":1,"otl":0,"gaa":2.7,"svp":0.89,"so":0,"gs":3,"ga":8,"sv":65,"sa":73,"toi":10657}},"qh":{"gp":5,"gaa":2.41,"svp":0.906,"team":"VGK"}},{"id":8476945,"name":"Connor Hellebuyck","team":"WPG","catches":"L","born":"1993-05-19","nat":"USA","ht":76,"wt":207,"draft":"2012 · Rd 5 · #130","ingoal":"https://ingoalmag.com/goaltenders/connor-hellebuyck/","seasons":{"2024-25":{"team":"WPG","gp":63,"w":47,"l":12,"otl":3,"gaa":2.0,"svp":0.925,"so":8},"2025-26":{"team":"WPG","gp":57,"w":23,"l":23,"otl":11,"gaa":2.86,"svp":0.895,"so":0,"gs":57,"ga":162,"sv":1385,"sa":1547,"toi":204087}},"qh":null},{"id":8483710,"name":"Dennis Hildeby","team":"TBL","catches":"L","born":"2001-08-19","nat":"SWE","ht":78,"wt":227,"draft":"2022 · Rd 4 · #122","ingoal":"https://ingoalmag.com/goaltenders/dennis-hildeby/","seasons":{"2024-25":{"team":"TOR","gp":6,"w":3,"l":3,"otl":0,"gaa":3.33,"svp":0.878,"so":0},"2025-26":{"team":"TOR","gp":20,"w":5,"l":7,"otl":4,"gaa":2.86,"svp":0.914,"so":1,"gs":14,"ga":48,"sv":501,"sa":548,"toi":60524}},"qh":{"gp":1,"gaa":2.01,"svp":0.944,"team":"TBL"}},{"id":8478499,"name":"Adin Hill","team":"VGK","catches":"L","born":"1996-05-11","nat":"CAN","ht":76,"wt":218,"draft":"2015 · Rd 3 · #76","ingoal":"https://ingoalmag.com/goaltenders/adin-hill/","seasons":{"2024-25":{"team":"VGK","gp":50,"w":32,"l":13,"otl":5,"gaa":2.47,"svp":0.906,"so":4},"2025-26":{"team":"VGK","gp":27,"w":10,"l":9,"otl":6,"gaa":3.04,"svp":0.871,"so":1,"gs":27,"ga":76,"sv":511,"sa":587,"toi":89869},"2026-27":{"team":"VGK","gp":1,"w":1,"l":0,"otl":0,"gaa":2.0,"svp":0.9,"so":0,"gs":1,"ga":2,"sv":18,"sa":20,"toi":3600}},"qh":{"gp":2,"gaa":2.41,"svp":0.886,"team":"VGK"}},{"id":8480981,"name":"Joel Hofer","team":"STL","catches":"L","born":"2000-07-30","nat":"CAN","ht":77,"wt":197,"draft":"2018 · Rd 4 · #107","ingoal":"https://ingoalmag.com/goaltenders/joel-hofer/","seasons":{"2024-25":{"team":"STL","gp":31,"w":16,"l":8,"otl":3,"gaa":2.64,"svp":0.904,"so":1},"2025-26":{"team":"STL","gp":46,"w":24,"l":13,"otl":5,"gaa":2.61,"svp":0.91,"so":6,"gs":43,"ga":114,"sv":1137,"sa":1250,"toi":157479},"2026-27":{"team":"STL","gp":2,"w":1,"l":1,"otl":0,"gaa":1.01,"svp":0.955,"so":1,"gs":2,"ga":2,"sv":42,"sa":44,"toi":7094}},"qh":{"gp":3,"gaa":1.68,"svp":0.93,"team":"STL"}},{"id":8477405,"name":"Marcus Hogberg","team":"NYI","catches":"L","born":"1994-11-25","nat":"SWE","ht":77,"wt":232,"draft":"2013 · Rd 3 · #78","ingoal":"https://ingoalmag.com/goaltenders/marcus-hogberg/","seasons":{"2024-25":{"team":"NYI","gp":15,"w":2,"l":6,"otl":3,"gaa":3.38,"svp":0.878,"so":0},"2025-26":{"team":"NYI","gp":1,"w":0,"l":0,"otl":0,"gaa":8.9,"svp":0.714,"so":0,"gs":0,"ga":2,"sv":5,"sa":7,"toi":809}},"qh":null},{"id":8478024,"name":"Ville Husso","team":"ANA","catches":"L","born":"1995-02-06","nat":"FIN","ht":75,"wt":202,"draft":"2014 · Rd 4 · #94","ingoal":"https://ingoalmag.com/goaltenders/ville-husso/","seasons":{"2024-25":{"team":"DET,ANA","gp":13,"w":2,"l":6,"otl":3,"gaa":3.47,"svp":0.89,"so":0},"2025-26":{"team":"ANA","gp":20,"w":10,"l":8,"otl":2,"gaa":3.25,"svp":0.884,"so":0,"gs":19,"ga":62,"sv":472,"sa":534,"toi":68738}},"qh":{"gp":2,"gaa":1.58,"svp":0.935,"team":"ANA"}},{"id":8478971,"name":"Connor Ingram","team":"EDM","catches":"L","born":"1997-03-31","nat":"CAN","ht":73,"wt":218,"draft":"2016 · Rd 3 · #88","ingoal":"https://ingoalmag.com/goaltenders/connor-ingram/","seasons":{"2024-25":{"team":"UTA","gp":22,"w":9,"l":8,"otl":4,"gaa":3.27,"svp":0.882,"so":0},"2025-26":{"team":"EDM","gp":32,"w":16,"l":10,"otl":3,"gaa":2.6,"svp":0.899,"so":2,"gs":30,"ga":77,"sv":686,"sa":763,"toi":106694}},"qh":null},{"id":8477465,"name":"Tristan Jarry","team":"EDM","catches":"L","born":"1995-04-29","nat":"CAN","ht":73,"wt":201,"draft":"2013 · Rd 2 · #44","ingoal":"https://ingoalmag.com/goaltenders/tristan-jarry/","seasons":{"2024-25":{"team":"PIT","gp":36,"w":16,"l":12,"otl":6,"gaa":3.12,"svp":0.893,"so":2},"2025-26":{"team":"PIT,EDM","gp":33,"w":18,"l":9,"otl":3,"gaa":3.32,"svp":0.882,"so":2,"gs":29,"ga":98,"sv":734,"sa":832,"toi":106417},"2026-27":{"team":"EDM","gp":1,"w":0,"l":0,"otl":1,"gaa":5.85,"svp":0.739,"so":0,"gs":1,"ga":6,"sv":17,"sa":23,"toi":3693}},"qh":{"gp":2,"gaa":3.46,"svp":0.837,"team":"EDM"}},{"id":8477992,"name":"Jonas Johansson","team":"OTT","catches":"L","born":"1995-09-19","nat":"SWE","ht":77,"wt":217,"draft":"2014 · Rd 3 · #61","ingoal":"https://ingoalmag.com/goaltenders/jonas-johansson/","seasons":{"2024-25":{"team":"TBL","gp":19,"w":9,"l":6,"otl":3,"gaa":3.13,"svp":0.895,"so":1},"2025-26":{"team":"TBL","gp":25,"w":11,"l":10,"otl":2,"gaa":3.29,"svp":0.884,"so":0,"gs":23,"ga":78,"sv":592,"sa":670,"toi":85411}},"qh":null},{"id":8481519,"name":"Spencer Knight","team":"CHI","catches":"L","born":"2001-04-19","nat":"USA","ht":75,"wt":191,"draft":"2019 · Rd 1 · #13","ingoal":"https://ingoalmag.com/goaltenders/spencer-knight/","seasons":{"2024-25":{"team":"FLA,CHI","gp":38,"w":17,"l":16,"otl":3,"gaa":2.72,"svp":0.902,"so":2},"2025-26":{"team":"CHI","gp":55,"w":19,"l":25,"otl":11,"gaa":2.82,"svp":0.902,"so":3,"gs":55,"ga":155,"sv":1428,"sa":1583,"toi":197595},"2026-27":{"team":"CHI","gp":3,"w":1,"l":2,"otl":0,"gaa":3.36,"svp":0.89,"so":0,"gs":3,"ga":10,"sv":81,"sa":91,"toi":10728}},"qh":{"gp":4,"gaa":3.8,"svp":0.885,"team":"CHI"}},{"id":8481611,"name":"Pyotr Kochetkov","team":"CAR","catches":"L","born":"1999-06-25","nat":"RUS","ht":75,"wt":196,"draft":"2019 · Rd 2 · #36","ingoal":"https://ingoalmag.com/goaltenders/pyotr-kochetkov/","seasons":{"2024-25":{"team":"CAR","gp":47,"w":27,"l":16,"otl":3,"gaa":2.6,"svp":0.898,"so":2},"2025-26":{"team":"CAR","gp":9,"w":6,"l":2,"otl":0,"gaa":2.33,"svp":0.899,"so":1,"gs":8,"ga":19,"sv":170,"sa":189,"toi":29409},"2026-27":{"team":"CAR","gp":1,"w":1,"l":0,"otl":0,"gaa":1.91,"svp":0.889,"so":0,"gs":1,"ga":2,"sv":16,"sa":18,"toi":3771}},"qh":{"gp":3,"gaa":1.64,"svp":0.912,"team":"CAR"}},{"id":8483668,"name":"Nikke Kokko","team":"SEA","catches":"L","born":"2004-03-14","nat":"FIN","ht":75,"wt":184,"draft":"2022 · Rd 2 · #58","ingoal":"https://ingoalmag.com/goaltenders/nikke-kokko/","seasons":{"2025-26":{"team":"SEA","gp":3,"w":1,"l":2,"otl":0,"gaa":3.04,"svp":0.89,"so":0,"gs":3,"ga":9,"sv":73,"sa":82,"toi":10661}},"qh":null},{"id":8482783,"name":"Aleksei Kolosov","team":"PHI","catches":"L","born":"2002-01-04","nat":"BLR","ht":73,"wt":185,"draft":"2021 · Rd 3 · #78","ingoal":"https://ingoalmag.com/goaltenders/aleksei-kolosov/","seasons":{"2024-25":{"team":"PHI","gp":17,"w":5,"l":9,"otl":1,"gaa":3.59,"svp":0.867,"so":0},"2025-26":{"team":"PHI","gp":4,"w":0,"l":2,"otl":0,"gaa":4.0,"svp":0.83,"so":0,"gs":2,"ga":8,"sv":39,"sa":47,"toi":7201}},"qh":null},{"id":8476914,"name":"Joonas Korpisalo","team":"NYR","catches":"L","born":"1994-04-28","nat":"FIN","ht":75,"wt":205,"draft":"2012 · Rd 3 · #62","ingoal":"https://ingoalmag.com/goaltenders/joonas-korpisalo/","seasons":{"2024-25":{"team":"BOS","gp":27,"w":11,"l":10,"otl":3,"gaa":2.9,"svp":0.893,"so":3},"2025-26":{"team":"BOS","gp":31,"w":14,"l":9,"otl":6,"gaa":3.15,"svp":0.894,"so":1,"gs":28,"ga":90,"sv":761,"sa":851,"toi":102785}},"qh":null},{"id":8475311,"name":"Darcy Kuemper","team":"LAK","catches":"L","born":"1990-05-05","nat":"CAN","ht":77,"wt":215,"draft":"2009 · Rd 6 · #161","ingoal":"https://ingoalmag.com/goaltenders/darcy-kuemper/","seasons":{"2024-25":{"team":"LAK","gp":50,"w":31,"l":11,"otl":7,"gaa":2.02,"svp":0.922,"so":5},"2025-26":{"team":"LAK","gp":50,"w":19,"l":14,"otl":15,"gaa":2.78,"svp":0.891,"so":3,"gs":50,"ga":134,"sv":1100,"sa":1234,"toi":173274},"2026-27":{"team":"LAK","gp":2,"w":0,"l":2,"otl":0,"gaa":5.11,"svp":0.831,"so":0,"gs":2,"ga":10,"sv":49,"sa":59,"toi":7041}},"qh":{"gp":3,"gaa":4.03,"svp":0.868,"team":"LAK"}},{"id":8480947,"name":"Kevin Lankinen","team":"VAN","catches":"L","born":"1995-04-28","nat":"FIN","ht":74,"wt":190,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/kevin-lankinen/","seasons":{"2024-25":{"team":"VAN","gp":51,"w":25,"l":15,"otl":10,"gaa":2.62,"svp":0.902,"so":4},"2025-26":{"team":"VAN","gp":47,"w":11,"l":27,"otl":5,"gaa":3.7,"svp":0.875,"so":0,"gs":43,"ga":160,"sv":1125,"sa":1285,"toi":155541},"2026-27":{"team":"VAN","gp":3,"w":1,"l":2,"otl":0,"gaa":6.5,"svp":0.824,"so":0,"gs":3,"ga":16,"sv":70,"sa":85,"toi":8855}},"qh":{"gp":6,"gaa":6.88,"svp":0.78,"team":"VAN"}},{"id":8482221,"name":"Devon Levi","team":"EDM","catches":"L","born":"2001-12-27","nat":"CAN","ht":72,"wt":187,"draft":"2020 · Rd 7 · #212","ingoal":"https://ingoalmag.com/goaltenders/devon-levi/","seasons":{"2024-25":{"team":"BUF","gp":9,"w":2,"l":7,"otl":0,"gaa":4.12,"svp":0.872,"so":0},"2026-27":{"team":"EDM","gp":2,"w":2,"l":0,"otl":0,"gaa":4.02,"svp":0.81,"so":0,"gs":2,"ga":8,"sv":34,"sa":42,"toi":7169}},"qh":{"gp":3,"gaa":3.35,"svp":0.863,"team":"EDM"}},{"id":8482761,"name":"Carl Lindbom","team":"VGK","catches":"L","born":"2003-05-20","nat":"SWE","ht":73,"wt":186,"draft":"2021 · Rd 7 · #222","ingoal":"https://ingoalmag.com/goaltenders/carl-lindbom/","seasons":{"2025-26":{"team":"VGK","gp":8,"w":2,"l":4,"otl":2,"gaa":3.0,"svp":0.873,"so":0,"gs":8,"ga":24,"sv":165,"sa":189,"toi":28840}},"qh":null},{"id":8479292,"name":"Charlie Lindgren","team":"WSH","catches":"R","born":"1993-12-18","nat":"USA","ht":74,"wt":190,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/charlie-lindgren/","seasons":{"2024-25":{"team":"WSH","gp":39,"w":20,"l":14,"otl":3,"gaa":2.73,"svp":0.896,"so":1},"2025-26":{"team":"WSH","gp":21,"w":9,"l":8,"otl":3,"gaa":3.52,"svp":0.879,"so":1,"gs":20,"ga":73,"sv":529,"sa":602,"toi":74762},"2026-27":{"team":"WSH","gp":1,"w":0,"l":1,"otl":0,"gaa":2.08,"svp":0.931,"so":0,"gs":1,"ga":2,"sv":27,"sa":29,"toi":3456}},"qh":{"gp":1,"gaa":2.08,"svp":0.931,"team":"WSH"}},{"id":8480045,"name":"Ukko-Pekka Luukkonen","team":"BUF","catches":"L","born":"1999-03-09","nat":"FIN","ht":77,"wt":223,"draft":"2017 · Rd 2 · #54","ingoal":"https://ingoalmag.com/goaltenders/ukko-pekka-luukkonen/","seasons":{"2024-25":{"team":"BUF","gp":55,"w":24,"l":24,"otl":5,"gaa":3.2,"svp":0.887,"so":2},"2025-26":{"team":"BUF","gp":35,"w":22,"l":9,"otl":3,"gaa":2.52,"svp":0.91,"so":1,"gs":34,"ga":85,"sv":846,"sa":930,"toi":121666},"2026-27":{"team":"BUF","gp":2,"w":1,"l":1,"otl":0,"gaa":4.03,"svp":0.784,"so":0,"gs":2,"ga":8,"sv":29,"sa":37,"toi":7148}},"qh":{"gp":4,"gaa":3.67,"svp":0.812,"team":"BUF"}},{"id":8479312,"name":"Alex Lyon","team":"BUF","catches":"L","born":"1992-12-09","nat":"USA","ht":73,"wt":199,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/alex-lyon/","seasons":{"2024-25":{"team":"DET","gp":30,"w":14,"l":9,"otl":1,"gaa":2.81,"svp":0.896,"so":1},"2025-26":{"team":"BUF","gp":36,"w":20,"l":10,"otl":4,"gaa":2.77,"svp":0.907,"so":3,"gs":34,"ga":92,"sv":888,"sa":979,"toi":119521}},"qh":null},{"id":8474593,"name":"Jacob Markstrom","team":"FLA","catches":"L","born":"1990-01-31","nat":"SWE","ht":78,"wt":207,"draft":"2008 · Rd 2 · #31","ingoal":"https://ingoalmag.com/goaltenders/jacob-markstrom/","seasons":{"2024-25":{"team":"NJD","gp":49,"w":26,"l":16,"otl":6,"gaa":2.5,"svp":0.9,"so":4},"2025-26":{"team":"NJD","gp":44,"w":23,"l":19,"otl":1,"gaa":3.07,"svp":0.883,"so":1,"gs":43,"ga":130,"sv":983,"sa":1113,"toi":152641},"2026-27":{"team":"FLA","gp":3,"w":2,"l":0,"otl":1,"gaa":1.27,"svp":0.927,"so":1,"gs":3,"ga":4,"sv":51,"sa":55,"toi":11318}},"qh":{"gp":5,"gaa":2.03,"svp":0.904,"team":"FLA"}},{"id":8477484,"name":"Spencer Martin","team":"NYR","catches":"L","born":"1995-06-08","nat":"CAN","ht":75,"wt":190,"draft":"2013 · Rd 3 · #63","ingoal":"https://ingoalmag.com/goaltenders/spencer-martin/","seasons":{"2024-25":{"team":"CAR","gp":9,"w":3,"l":4,"otl":1,"gaa":3.89,"svp":0.846,"so":1},"2025-26":{"team":"NYR","gp":6,"w":1,"l":3,"otl":0,"gaa":4.13,"svp":0.864,"so":0,"gs":4,"ga":20,"sv":127,"sa":147,"toi":17439}},"qh":null},{"id":8482447,"name":"Leevi Merilainen","team":"VAN","catches":"L","born":"2002-08-13","nat":"FIN","ht":75,"wt":186,"draft":"2020 · Rd 3 · #71","ingoal":"https://ingoalmag.com/goaltenders/leevi-merilainen/","seasons":{"2024-25":{"team":"OTT","gp":12,"w":8,"l":3,"otl":1,"gaa":1.99,"svp":0.925,"so":3},"2025-26":{"team":"OTT","gp":20,"w":8,"l":10,"otl":1,"gaa":3.51,"svp":0.86,"so":0,"gs":19,"ga":64,"sv":393,"sa":457,"toi":65669},"2026-27":{"team":"VAN","gp":2,"w":1,"l":0,"otl":0,"gaa":1.32,"svp":0.943,"so":0,"gs":1,"ga":2,"sv":33,"sa":35,"toi":5441}},"qh":{"gp":4,"gaa":2.18,"svp":0.929,"team":"VAN"}},{"id":8478007,"name":"Elvis Merzlikins","team":"TOR","catches":"L","born":"1994-04-13","nat":"LVA","ht":75,"wt":190,"draft":"2014 · Rd 3 · #76","ingoal":"https://ingoalmag.com/goaltenders/elvis-merzlikins/","seasons":{"2024-25":{"team":"CBJ","gp":53,"w":26,"l":21,"otl":5,"gaa":3.18,"svp":0.892,"so":1},"2025-26":{"team":"CBJ","gp":30,"w":14,"l":11,"otl":3,"gaa":3.4,"svp":0.883,"so":1,"gs":29,"ga":95,"sv":717,"sa":812,"toi":100717}},"qh":null},{"id":8483114,"name":"Thomas Milic","team":"WPG","catches":"L","born":"2003-04-14","nat":"CAN","ht":72,"wt":175,"draft":"2023 · Rd 5 · #151","ingoal":"https://ingoalmag.com/goaltenders/thomas-milic/","seasons":{"2025-26":{"team":"WPG","gp":3,"w":0,"l":1,"otl":0,"gaa":3.46,"svp":0.871,"so":0,"gs":1,"ga":8,"sv":54,"sa":62,"toi":8318}},"qh":null},{"id":8481529,"name":"Trent Miner","team":"COL","catches":"L","born":"2001-02-05","nat":"CAN","ht":73,"wt":185,"draft":"2019 · Rd 7 · #202","ingoal":"https://ingoalmag.com/goaltenders/trent-miner/","seasons":{"2024-25":{"team":"COL","gp":2,"w":0,"l":1,"otl":0,"gaa":2.62,"svp":0.879,"so":0},"2025-26":{"team":"COL","gp":4,"w":1,"l":0,"otl":3,"gaa":2.03,"svp":0.933,"so":1,"gs":3,"ga":8,"sv":97,"sa":104,"toi":14194}},"qh":null},{"id":8478470,"name":"Samuel Montembeault","team":"MTL","catches":"L","born":"1996-10-30","nat":"CAN","ht":75,"wt":218,"draft":"2015 · Rd 3 · #77","ingoal":"https://ingoalmag.com/goaltenders/samuel-montembeault/","seasons":{"2024-25":{"team":"MTL","gp":62,"w":31,"l":24,"otl":7,"gaa":2.82,"svp":0.902,"so":4},"2025-26":{"team":"MTL","gp":25,"w":10,"l":8,"otl":4,"gaa":3.43,"svp":0.872,"so":0,"gs":23,"ga":81,"sv":554,"sa":635,"toi":85092}},"qh":null},{"id":8475852,"name":"Petr Mrazek","team":"ANA","catches":"L","born":"1992-02-14","nat":"CZE","ht":74,"wt":192,"draft":"2010 · Rd 5 · #141","ingoal":"https://ingoalmag.com/goaltenders/petr-mrazek/","seasons":{"2024-25":{"team":"CHI,DET","gp":38,"w":12,"l":21,"otl":2,"gaa":3.35,"svp":0.891,"so":1},"2025-26":{"team":"ANA","gp":10,"w":3,"l":5,"otl":0,"gaa":4.07,"svp":0.858,"so":0,"gs":8,"ga":35,"sv":212,"sa":247,"toi":30953}},"qh":null},{"id":8483703,"name":"Sergei Murashov","team":"PIT","catches":"R","born":"2004-04-01","nat":"RUS","ht":74,"wt":186,"draft":"2022 · Rd 4 · #118","ingoal":"https://ingoalmag.com/goaltenders/sergei-murashov/","seasons":{"2025-26":{"team":"PIT","gp":5,"w":1,"l":1,"otl":2,"gaa":2.56,"svp":0.897,"so":1,"gs":4,"ga":12,"sv":104,"sa":116,"toi":16877},"2026-27":{"team":"PIT","gp":1,"w":0,"l":1,"otl":0,"gaa":3.14,"svp":0.914,"so":0,"gs":1,"ga":3,"sv":32,"sa":35,"toi":3443}},"qh":{"gp":2,"gaa":2.45,"svp":0.939,"team":"PIT"}},{"id":8476899,"name":"Matt Murray","team":"SEA","catches":"L","born":"1994-05-25","nat":"CAN","ht":77,"wt":220,"draft":"2012 · Rd 3 · #83","ingoal":"https://ingoalmag.com/goaltenders/matt-murray/","seasons":{"2024-25":{"team":"TOR","gp":2,"w":1,"l":1,"otl":0,"gaa":3.54,"svp":0.879,"so":0},"2025-26":{"team":"SEA","gp":5,"w":0,"l":2,"otl":1,"gaa":2.21,"svp":0.922,"so":0,"gs":4,"ga":8,"sv":94,"sa":102,"toi":13013}},"qh":null},{"id":8477968,"name":"Alex Nedeljkovic","team":"SJS","catches":"L","born":"1996-01-07","nat":"USA","ht":72,"wt":205,"draft":"2014 · Rd 2 · #37","ingoal":"https://ingoalmag.com/goaltenders/alex-nedeljkovic/","seasons":{"2024-25":{"team":"PIT","gp":38,"w":14,"l":15,"otl":5,"gaa":3.12,"svp":0.894,"so":1},"2025-26":{"team":"SJS","gp":40,"w":18,"l":14,"otl":4,"gaa":2.87,"svp":0.896,"so":0,"gs":34,"ga":109,"sv":940,"sa":1049,"toi":136678}},"qh":{"gp":1,"gaa":1.97,"svp":0.923,"team":"SJS"}},{"id":8479979,"name":"Jake Oettinger","team":"DAL","catches":"L","born":"1998-12-18","nat":"USA","ht":78,"wt":225,"draft":"2017 · Rd 1 · #26","ingoal":"https://ingoalmag.com/goaltenders/jake-oettinger/","seasons":{"2024-25":{"team":"DAL","gp":58,"w":36,"l":18,"otl":4,"gaa":2.59,"svp":0.909,"so":2},"2025-26":{"team":"DAL","gp":54,"w":35,"l":12,"otl":6,"gaa":2.59,"svp":0.899,"so":4,"gs":54,"ga":138,"sv":1234,"sa":1372,"toi":191651},"2026-27":{"team":"DAL","gp":2,"w":1,"l":1,"otl":0,"gaa":1.01,"svp":0.943,"so":1,"gs":2,"ga":2,"sv":33,"sa":35,"toi":7097}},"qh":{"gp":4,"gaa":0.74,"svp":0.963,"team":"DAL"}},{"id":8484910,"name":"Victor Ostman","team":"SEA","catches":"L","born":"2000-10-03","nat":"SWE","ht":76,"wt":205,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/victor-ostman/","seasons":{"2025-26":{"team":"SEA","gp":1,"w":0,"l":1,"otl":0,"gaa":2.1,"svp":0.943,"so":0,"gs":1,"ga":2,"sv":33,"sa":35,"toi":3430}},"qh":null},{"id":8480238,"name":"Jiri Patera","team":"BOS","catches":"L","born":"1999-02-24","nat":"CZE","ht":74,"wt":223,"draft":"2017 · Rd 6 · #161","ingoal":"https://ingoalmag.com/goaltenders/jiri-patera/","seasons":{"2025-26":{"team":"VAN","gp":1,"w":0,"l":1,"otl":0,"gaa":7.39,"svp":0.825,"so":0,"gs":1,"ga":7,"sv":33,"sa":40,"toi":3409}},"qh":null},{"id":8475717,"name":"Calvin Pickard","team":"MIN","catches":"L","born":"1992-04-15","nat":"CAN","ht":73,"wt":206,"draft":"2010 · Rd 2 · #49","ingoal":"https://ingoalmag.com/goaltenders/calvin-pickard/","seasons":{"2024-25":{"team":"EDM","gp":36,"w":22,"l":10,"otl":1,"gaa":2.71,"svp":0.9,"so":0},"2025-26":{"team":"EDM","gp":16,"w":5,"l":6,"otl":2,"gaa":3.68,"svp":0.871,"so":0,"gs":13,"ga":53,"sv":357,"sa":410,"toi":51848}},"qh":null},{"id":8480051,"name":"Cayden Primeau","team":"CAR","catches":"L","born":"1999-08-11","nat":"USA","ht":75,"wt":205,"draft":"2017 · Rd 7 · #199","ingoal":"https://ingoalmag.com/goaltenders/cayden-primeau/","seasons":{"2024-25":{"team":"MTL","gp":11,"w":2,"l":3,"otl":1,"gaa":4.7,"svp":0.836,"so":0},"2025-26":{"team":"TOR","gp":3,"w":2,"l":1,"otl":0,"gaa":4.3,"svp":0.838,"so":0,"gs":3,"ga":13,"sv":67,"sa":80,"toi":10888}},"qh":null},{"id":8471734,"name":"Jonathan Quick","team":"NYR","catches":"L","born":"1986-01-21","nat":"USA","ht":73,"wt":219,"draft":"2005 · Rd 3 · #72","ingoal":"https://ingoalmag.com/goaltenders/jonathan-quick/","seasons":{"2024-25":{"team":"NYR","gp":24,"w":11,"l":7,"otl":2,"gaa":3.17,"svp":0.893,"so":3},"2025-26":{"team":"NYR","gp":25,"w":6,"l":17,"otl":2,"gaa":3.09,"svp":0.891,"so":2,"gs":24,"ga":73,"sv":598,"sa":671,"toi":85080}},"qh":null},{"id":8473503,"name":"James Reimer","team":"OTT","catches":"L","born":"1988-03-15","nat":"CAN","ht":74,"wt":200,"draft":"2006 · Rd 4 · #99","ingoal":"https://ingoalmag.com/goaltenders/james-reimer/","seasons":{"2024-25":{"team":"ANA,BUF","gp":24,"w":10,"l":10,"otl":2,"gaa":3.04,"svp":0.897,"so":1},"2025-26":{"team":"OTT","gp":14,"w":7,"l":4,"otl":2,"gaa":2.42,"svp":0.886,"so":1,"gs":13,"ga":33,"sv":256,"sa":289,"toi":49067}},"qh":null},{"id":8479496,"name":"David Rittich","team":"NJD","catches":"L","born":"1992-08-19","nat":"CZE","ht":75,"wt":200,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/david-rittich/","seasons":{"2024-25":{"team":"LAK","gp":34,"w":16,"l":14,"otl":2,"gaa":2.84,"svp":0.887,"so":0},"2025-26":{"team":"NYI","gp":30,"w":14,"l":10,"otl":3,"gaa":2.76,"svp":0.894,"so":2,"gs":28,"ga":76,"sv":644,"sa":720,"toi":99081}},"qh":null},{"id":8477424,"name":"Juuse Saros","team":"NSH","catches":"L","born":"1995-04-19","nat":"FIN","ht":71,"wt":180,"draft":"2013 · Rd 4 · #99","ingoal":"https://ingoalmag.com/goaltenders/juuse-saros/","seasons":{"2024-25":{"team":"NSH","gp":58,"w":20,"l":31,"otl":6,"gaa":2.98,"svp":0.896,"so":4},"2025-26":{"team":"NSH","gp":59,"w":28,"l":22,"otl":8,"gaa":3.16,"svp":0.894,"so":0,"gs":59,"ga":181,"sv":1519,"sa":1700,"toi":205953},"2026-27":{"team":"NSH","gp":3,"w":1,"l":1,"otl":1,"gaa":2.95,"svp":0.907,"so":0,"gs":3,"ga":9,"sv":88,"sa":97,"toi":10971}},"qh":{"gp":4,"gaa":2.72,"svp":0.915,"team":"NSH"}},{"id":8481033,"name":"Akira Schmid","team":"FLA","catches":"L","born":"2000-05-12","nat":"CHE","ht":77,"wt":190,"draft":"2018 · Rd 5 · #136","ingoal":"https://ingoalmag.com/goaltenders/akira-schmid/","seasons":{"2024-25":{"team":"VGK","gp":5,"w":2,"l":0,"otl":1,"gaa":1.26,"svp":0.944,"so":0},"2025-26":{"team":"VGK","gp":34,"w":16,"l":10,"otl":6,"gaa":2.59,"svp":0.893,"so":2,"gs":29,"ga":85,"sv":706,"sa":791,"toi":117947},"2026-27":{"team":"FLA","gp":1,"w":0,"l":0,"otl":1,"gaa":3.8,"svp":0.875,"so":0,"gs":1,"ga":4,"sv":28,"sa":32,"toi":3794}},"qh":{"gp":2,"gaa":4.14,"svp":0.868,"team":"FLA"}},{"id":8482949,"name":"Arsenii Sergeev","team":"CGY","catches":"L","born":"2002-12-16","nat":"RUS","ht":75,"wt":192,"draft":"2021 · Rd 7 · #205","ingoal":"https://ingoalmag.com/goaltenders/arsenii-sergeev/","seasons":{"2025-26":{"team":"CGY","gp":1,"w":1,"l":0,"otl":0,"gaa":1.0,"svp":0.964,"so":0,"gs":1,"ga":1,"sv":27,"sa":28,"toi":3600}},"qh":null},{"id":8482411,"name":"Hunter Shepard","team":"OTT","catches":"L","born":"1995-11-07","nat":"USA","ht":71,"wt":225,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/hunter-shepard/","seasons":{"2025-26":{"team":"OTT","gp":1,"w":0,"l":1,"otl":0,"gaa":3.35,"svp":0.833,"so":0,"gs":0,"ga":2,"sv":10,"sa":12,"toi":2147}},"qh":null},{"id":8478048,"name":"Igor Shesterkin","team":"NYR","catches":"L","born":"1995-12-30","nat":"RUS","ht":73,"wt":198,"draft":"2014 · Rd 4 · #118","ingoal":"https://ingoalmag.com/goaltenders/igor-shesterkin/","seasons":{"2024-25":{"team":"NYR","gp":61,"w":27,"l":29,"otl":5,"gaa":2.86,"svp":0.905,"so":6},"2025-26":{"team":"NYR","gp":51,"w":25,"l":19,"otl":6,"gaa":2.5,"svp":0.912,"so":1,"gs":51,"ga":126,"sv":1299,"sa":1425,"toi":181453},"2026-27":{"team":"NYR","gp":4,"w":3,"l":1,"otl":0,"gaa":1.75,"svp":0.926,"so":0,"gs":4,"ga":7,"sv":88,"sa":95,"toi":14361}},"qh":{"gp":5,"gaa":1.79,"svp":0.927,"team":"NYR"}},{"id":8481668,"name":"Arturs Silovs","team":"PIT","catches":"L","born":"2001-03-22","nat":"LVA","ht":76,"wt":219,"draft":"2019 · Rd 6 · #156","ingoal":"https://ingoalmag.com/goaltenders/arturs-silovs/","seasons":{"2024-25":{"team":"VAN","gp":10,"w":2,"l":6,"otl":1,"gaa":3.65,"svp":0.861,"so":0},"2025-26":{"team":"PIT","gp":39,"w":19,"l":12,"otl":8,"gaa":3.07,"svp":0.888,"so":2,"gs":38,"ga":115,"sv":906,"sa":1020,"toi":134793},"2026-27":{"team":"PIT","gp":3,"w":2,"l":1,"otl":0,"gaa":3.38,"svp":0.859,"so":1,"gs":3,"ga":10,"sv":61,"sa":71,"toi":10657}},"qh":{"gp":4,"gaa":2.72,"svp":0.885,"team":"PIT"}},{"id":8479973,"name":"Stuart Skinner","team":"WPG","catches":"L","born":"1998-11-01","nat":"CAN","ht":76,"wt":215,"draft":"2017 · Rd 3 · #78","ingoal":"https://ingoalmag.com/goaltenders/stuart-skinner/","seasons":{"2024-25":{"team":"EDM","gp":51,"w":26,"l":18,"otl":4,"gaa":2.81,"svp":0.896,"so":3},"2025-26":{"team":"EDM,PIT","gp":50,"w":23,"l":17,"otl":9,"gaa":2.92,"svp":0.888,"so":2,"gs":50,"ga":142,"sv":1125,"sa":1267,"toi":175317},"2026-27":{"team":"WPG","gp":3,"w":2,"l":0,"otl":1,"gaa":2.62,"svp":0.92,"so":0,"gs":3,"ga":8,"sv":92,"sa":100,"toi":11001}},"qh":{"gp":3,"gaa":2.62,"svp":0.92,"team":"WPG"}},{"id":8482821,"name":"Arvid Soderblom","team":"CHI","catches":"L","born":"1999-08-19","nat":"SWE","ht":75,"wt":180,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/arvid-soderblom/","seasons":{"2024-25":{"team":"CHI","gp":36,"w":10,"l":18,"otl":7,"gaa":3.18,"svp":0.898,"so":0},"2025-26":{"team":"CHI","gp":26,"w":8,"l":13,"otl":3,"gaa":3.8,"svp":0.88,"so":1,"gs":24,"ga":93,"sv":681,"sa":774,"toi":88117},"2026-27":{"team":"CHI","gp":1,"w":0,"l":1,"otl":0,"gaa":6.0,"svp":0.812,"so":0,"gs":1,"ga":6,"sv":26,"sa":32,"toi":3600}},"qh":{"gp":2,"gaa":4.58,"svp":0.82,"team":"CHI"}},{"id":8481544,"name":"Mads Sogaard","team":"TBL","catches":"L","born":"2000-12-13","nat":"DNK","ht":79,"wt":235,"draft":"2019 · Rd 2 · #37","ingoal":"https://ingoalmag.com/goaltenders/mads-sogaard/","seasons":{"2024-25":{"team":"OTT","gp":2,"w":1,"l":1,"otl":0,"gaa":5.24,"svp":0.8,"so":0},"2025-26":{"team":"OTT","gp":2,"w":1,"l":0,"otl":0,"gaa":4.65,"svp":0.833,"so":0,"gs":1,"ga":6,"sv":30,"sa":36,"toi":4645}},"qh":null},{"id":8478009,"name":"Ilya Sorokin","team":"NYI","catches":"L","born":"1995-08-04","nat":"RUS","ht":74,"wt":195,"draft":"2014 · Rd 3 · #78","ingoal":"https://ingoalmag.com/goaltenders/ilya-sorokin/","seasons":{"2024-25":{"team":"NYI","gp":61,"w":30,"l":24,"otl":6,"gaa":2.71,"svp":0.907,"so":4},"2025-26":{"team":"NYI","gp":55,"w":29,"l":24,"otl":2,"gaa":2.68,"svp":0.906,"so":7,"gs":54,"ga":144,"sv":1386,"sa":1530,"toi":193570},"2026-27":{"team":"NYI","gp":2,"w":1,"l":1,"otl":0,"gaa":1.02,"svp":0.968,"so":1,"gs":2,"ga":2,"sv":61,"sa":63,"toi":7076}},"qh":{"gp":4,"gaa":1.77,"svp":0.937,"team":"NYI"}},{"id":8483532,"name":"Clay Stevenson","team":"WPG","catches":"L","born":"1999-03-03","nat":"CAN","ht":76,"wt":195,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/clay-stevenson/","seasons":{"2025-26":{"team":"WSH","gp":4,"w":3,"l":1,"otl":0,"gaa":2.0,"svp":0.921,"so":0,"gs":4,"ga":8,"sv":93,"sa":101,"toi":14384},"2026-27":{"team":"WPG","gp":1,"w":1,"l":0,"otl":0,"gaa":2.0,"svp":0.935,"so":0,"gs":1,"ga":2,"sv":29,"sa":31,"toi":3600}},"qh":{"gp":2,"gaa":3.1,"svp":0.872,"team":"WPG"}},{"id":8476932,"name":"Anthony Stolarz","team":"TOR","catches":"L","born":"1994-01-20","nat":"USA","ht":78,"wt":248,"draft":"2012 · Rd 2 · #45","ingoal":"https://ingoalmag.com/goaltenders/anthony-stolarz/","seasons":{"2024-25":{"team":"TOR","gp":34,"w":21,"l":8,"otl":3,"gaa":2.14,"svp":0.926,"so":4},"2025-26":{"team":"TOR","gp":26,"w":10,"l":10,"otl":3,"gaa":3.28,"svp":0.893,"so":0,"gs":25,"ga":76,"sv":632,"sa":708,"toi":83355},"2026-27":{"team":"TOR","gp":2,"w":2,"l":0,"otl":0,"gaa":2.44,"svp":0.904,"so":0,"gs":2,"ga":5,"sv":47,"sa":52,"toi":7388}},"qh":{"gp":2,"gaa":2.44,"svp":0.904,"team":"TOR"}},{"id":8480280,"name":"Jeremy Swayman","team":"BOS","catches":"L","born":"1998-11-24","nat":"USA","ht":75,"wt":196,"draft":"2017 · Rd 4 · #111","ingoal":"https://ingoalmag.com/goaltenders/jeremy-swayman/","seasons":{"2024-25":{"team":"BOS","gp":58,"w":22,"l":29,"otl":7,"gaa":3.11,"svp":0.892,"so":4},"2025-26":{"team":"BOS","gp":55,"w":31,"l":18,"otl":4,"gaa":2.71,"svp":0.908,"so":2,"gs":54,"ga":146,"sv":1426,"sa":1571,"toi":194117},"2026-27":{"team":"BOS","gp":3,"w":2,"l":1,"otl":0,"gaa":2.3,"svp":0.914,"so":1,"gs":3,"ga":7,"sv":74,"sa":81,"toi":10945}},"qh":{"gp":5,"gaa":1.79,"svp":0.932,"team":"BOS"}},{"id":8475660,"name":"Cam Talbot","team":"CBJ","catches":"L","born":"1987-07-05","nat":"CAN","ht":75,"wt":205,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/cam-talbot/","seasons":{"2024-25":{"team":"DET","gp":47,"w":21,"l":19,"otl":5,"gaa":2.93,"svp":0.901,"so":2},"2025-26":{"team":"DET","gp":34,"w":12,"l":9,"otl":6,"gaa":3.19,"svp":0.883,"so":0,"gs":25,"ga":93,"sv":704,"sa":797,"toi":105011}},"qh":{"gp":1,"gaa":1.85,"svp":0.909,"team":"CBJ"}},{"id":8480193,"name":"Daniil Tarasov","team":"DET","catches":"L","born":"1999-03-27","nat":"RUS","ht":77,"wt":204,"draft":"2017 · Rd 3 · #86","ingoal":"https://ingoalmag.com/goaltenders/daniil-tarasov/","seasons":{"2024-25":{"team":"CBJ","gp":20,"w":7,"l":10,"otl":2,"gaa":3.54,"svp":0.881,"so":1},"2025-26":{"team":"FLA","gp":33,"w":13,"l":15,"otl":3,"gaa":3.05,"svp":0.895,"so":0,"gs":31,"ga":97,"sv":828,"sa":925,"toi":114340}},"qh":{"gp":2,"gaa":0.66,"svp":0.974,"team":"DET"}},{"id":8480313,"name":"Logan Thompson","team":"WSH","catches":"R","born":"1997-02-25","nat":"CAN","ht":76,"wt":205,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/logan-thompson/","seasons":{"2024-25":{"team":"WSH","gp":43,"w":31,"l":6,"otl":6,"gaa":2.49,"svp":0.91,"so":2},"2025-26":{"team":"WSH","gp":58,"w":31,"l":21,"otl":6,"gaa":2.44,"svp":0.912,"so":4,"gs":58,"ga":140,"sv":1447,"sa":1587,"toi":206703},"2026-27":{"team":"WSH","gp":2,"w":2,"l":0,"otl":0,"gaa":2.5,"svp":0.921,"so":0,"gs":2,"ga":5,"sv":58,"sa":63,"toi":7193}},"qh":{"gp":4,"gaa":2.78,"svp":0.902,"team":"WSH"}},{"id":8484268,"name":"Nikita Tolopilo","team":"VAN","catches":"L","born":"2000-04-06","nat":"BLR","ht":78,"wt":229,"draft":"Undrafted","ingoal":"https://ingoalmag.com/goaltenders/nikita-tolopilo/","seasons":{"2024-25":{"team":"VAN","gp":2,"w":1,"l":1,"otl":0,"gaa":2.15,"svp":0.885,"so":0},"2025-26":{"team":"VAN","gp":21,"w":6,"l":11,"otl":2,"gaa":3.61,"svp":0.881,"so":0,"gs":18,"ga":69,"sv":513,"sa":582,"toi":68741}},"qh":null},{"id":8476999,"name":"Linus Ullmark","team":"OTT","catches":"L","born":"1993-07-31","nat":"SWE","ht":76,"wt":223,"draft":"2012 · Rd 6 · #163","ingoal":"https://ingoalmag.com/goaltenders/linus-ullmark/","seasons":{"2024-25":{"team":"OTT","gp":44,"w":25,"l":14,"otl":3,"gaa":2.72,"svp":0.91,"so":4},"2025-26":{"team":"OTT","gp":49,"w":28,"l":12,"otl":8,"gaa":2.73,"svp":0.891,"so":3,"gs":49,"ga":131,"sv":1067,"sa":1198,"toi":173008},"2026-27":{"team":"OTT","gp":2,"w":2,"l":0,"otl":0,"gaa":1.2,"svp":0.949,"so":0,"gs":2,"ga":2,"sv":37,"sa":39,"toi":6000}},"qh":{"gp":5,"gaa":1.27,"svp":0.948,"team":"OTT"}},{"id":8477970,"name":"Vitek Vanecek","team":"NYI","catches":"L","born":"1996-01-09","nat":"CZE","ht":74,"wt":188,"draft":"2014 · Rd 2 · #39","ingoal":"https://ingoalmag.com/goaltenders/vitek-vanecek/","seasons":{"2024-25":{"team":"SJS,FLA","gp":25,"w":5,"l":14,"otl":4,"gaa":3.62,"svp":0.884,"so":1},"2025-26":{"team":"UTA","gp":22,"w":5,"l":13,"otl":3,"gaa":2.93,"svp":0.883,"so":1,"gs":19,"ga":59,"sv":447,"sa":506,"toi":72375}},"qh":null},{"id":8473575,"name":"Semyon Varlamov","team":"NYI","catches":"L","born":"1988-04-27","nat":"RUS","ht":73,"wt":203,"draft":"2006 · Rd 1 · #23","ingoal":"https://ingoalmag.com/goaltenders/semyon-varlamov/","seasons":{"2024-25":{"team":"NYI","gp":10,"w":3,"l":4,"otl":3,"gaa":2.89,"svp":0.889,"so":0},"2026-27":{"team":"NYI","gp":1,"w":0,"l":1,"otl":0,"gaa":3.03,"svp":0.864,"so":0,"gs":1,"ga":3,"sv":19,"sa":22,"toi":3566}},"qh":{"gp":1,"gaa":3.03,"svp":0.864,"team":"NYI"}},{"id":8476883,"name":"Andrei Vasilevskiy","team":"TBL","catches":"L","born":"1994-07-25","nat":"RUS","ht":76,"wt":220,"draft":"2012 · Rd 1 · #19","ingoal":"https://ingoalmag.com/goaltenders/andrei-vasilevskiy/","seasons":{"2024-25":{"team":"TBL","gp":63,"w":38,"l":20,"otl":5,"gaa":2.18,"svp":0.921,"so":6},"2025-26":{"team":"TBL","gp":58,"w":39,"l":15,"otl":4,"gaa":2.31,"svp":0.912,"so":2,"gs":58,"ga":132,"sv":1353,"sa":1483,"toi":205845},"2026-27":{"team":"TBL","gp":3,"w":2,"l":1,"otl":0,"gaa":2.05,"svp":0.9,"so":0,"gs":3,"ga":6,"sv":54,"sa":60,"toi":10552}},"qh":{"gp":4,"gaa":2.29,"svp":0.892,"team":"TBL"}},{"id":8478872,"name":"Karel Vejmelka","team":"UTA","catches":"R","born":"1996-05-25","nat":"CZE","ht":76,"wt":221,"draft":"2015 · Rd 5 · #145","ingoal":"https://ingoalmag.com/goaltenders/karel-vejmelka/","seasons":{"2024-25":{"team":"UTA","gp":58,"w":26,"l":22,"otl":8,"gaa":2.58,"svp":0.904,"so":1},"2025-26":{"team":"UTA","gp":64,"w":38,"l":20,"otl":3,"gaa":2.75,"svp":0.897,"so":2,"gs":63,"ga":169,"sv":1458,"sa":1626,"toi":221565},"2026-27":{"team":"UTA","gp":3,"w":2,"l":1,"otl":0,"gaa":2.02,"svp":0.913,"so":1,"gs":3,"ga":6,"sv":63,"sa":69,"toi":10706}},"qh":{"gp":5,"gaa":2.13,"svp":0.907,"team":"UTA"}},{"id":8478435,"name":"Dan Vladar","team":"PHI","catches":"L","born":"1997-08-20","nat":"CZE","ht":77,"wt":209,"draft":"2015 · Rd 3 · #75","ingoal":"https://ingoalmag.com/goaltenders/dan-vladar/","seasons":{"2024-25":{"team":"CGY","gp":30,"w":12,"l":11,"otl":6,"gaa":2.8,"svp":0.898,"so":2},"2025-26":{"team":"PHI","gp":52,"w":29,"l":14,"otl":7,"gaa":2.42,"svp":0.906,"so":0,"gs":51,"ga":121,"sv":1162,"sa":1283,"toi":179713},"2026-27":{"team":"PHI","gp":2,"w":0,"l":2,"otl":0,"gaa":5.12,"svp":0.863,"so":0,"gs":2,"ga":10,"sv":63,"sa":73,"toi":7025}},"qh":{"gp":3,"gaa":5.08,"svp":0.857,"team":"PHI"}},{"id":8482661,"name":"Jesper Wallstedt","team":"MIN","catches":"L","born":"2002-11-14","nat":"SWE","ht":75,"wt":214,"draft":"2021 · Rd 1 · #20","ingoal":"https://ingoalmag.com/goaltenders/jesper-wallstedt/","seasons":{"2024-25":{"team":"MIN","gp":2,"w":0,"l":2,"otl":0,"gaa":4.09,"svp":0.843,"so":0},"2025-26":{"team":"MIN","gp":35,"w":18,"l":9,"otl":6,"gaa":2.61,"svp":0.916,"so":4,"gs":33,"ga":87,"sv":934,"sa":1020,"toi":119799},"2026-27":{"team":"MIN","gp":3,"w":2,"l":0,"otl":1,"gaa":1.63,"svp":0.933,"so":0,"gs":3,"ga":5,"sv":70,"sa":75,"toi":11016}},"qh":{"gp":6,"gaa":1.82,"svp":0.933,"team":"MIN"}},{"id":8475809,"name":"Scott Wedgewood","team":"COL","catches":"L","born":"1992-08-14","nat":"CAN","ht":74,"wt":201,"draft":"2010 · Rd 3 · #84","ingoal":"https://ingoalmag.com/goaltenders/scott-wedgewood/","seasons":{"2024-25":{"team":"NSH,COL","gp":24,"w":14,"l":6,"otl":2,"gaa":2.32,"svp":0.908,"so":2},"2025-26":{"team":"COL","gp":45,"w":31,"l":6,"otl":6,"gaa":2.02,"svp":0.921,"so":4,"gs":43,"ga":86,"sv":1007,"sa":1093,"toi":152944}},"qh":{"gp":1,"gaa":3.0,"svp":0.897,"team":"COL"}},{"id":8481692,"name":"Dustin Wolf","team":"CGY","catches":"L","born":"2001-04-16","nat":"USA","ht":72,"wt":166,"draft":"2019 · Rd 7 · #214","ingoal":"https://ingoalmag.com/goaltenders/dustin-wolf/","seasons":{"2024-25":{"team":"CGY","gp":53,"w":29,"l":16,"otl":8,"gaa":2.64,"svp":0.91,"so":3},"2025-26":{"team":"CGY","gp":57,"w":23,"l":29,"otl":3,"gaa":3.01,"svp":0.899,"so":2,"gs":55,"ga":158,"sv":1401,"sa":1558,"toi":188954},"2026-27":{"team":"CGY","gp":2,"w":0,"l":2,"otl":0,"gaa":6.01,"svp":0.797,"so":0,"gs":2,"ga":12,"sv":47,"sa":59,"toi":7190}},"qh":{"gp":3,"gaa":5.42,"svp":0.816,"team":"CGY"}},{"id":8479361,"name":"Joseph Woll","team":"PHI","catches":"L","born":"1998-07-12","nat":"USA","ht":75,"wt":212,"draft":"2016 · Rd 3 · #62","ingoal":"https://ingoalmag.com/goaltenders/joseph-woll/","seasons":{"2024-25":{"team":"TOR","gp":42,"w":27,"l":14,"otl":1,"gaa":2.73,"svp":0.909,"so":1},"2025-26":{"team":"TOR","gp":39,"w":15,"l":16,"otl":7,"gaa":3.34,"svp":0.899,"so":2,"gs":38,"ga":124,"sv":1097,"sa":1220,"toi":133804},"2026-27":{"team":"PHI","gp":2,"w":0,"l":0,"otl":2,"gaa":2.87,"svp":0.929,"so":0,"gs":2,"ga":6,"sv":78,"sa":84,"toi":7537}},"qh":{"gp":4,"gaa":2.95,"svp":0.914,"team":"PHI"}}]};
+const SEASONS = ["2026-27","2025-26","2024-25"];
+const TEAMS = {ANA:["Anaheim","#F47A38"],BOS:["Boston","#B58B0B"],BUF:["Buffalo","#003087"],CAR:["Carolina","#CE1126"],CBJ:["Columbus","#002654"],CGY:["Calgary","#C8102E"],CHI:["Chicago","#CF0A2C"],COL:["Colorado","#6F263D"],DAL:["Dallas","#006847"],DET:["Detroit","#CE1126"],EDM:["Edmonton","#FF4C00"],FLA:["Florida","#C8102E"],LAK:["Los Angeles","#3d3d3d"],MIN:["Minnesota","#154734"],MTL:["Montréal","#AF1E2D"],NJD:["New Jersey","#CE1126"],NSH:["Nashville","#B98B0B"],NYI:["NY Islanders","#00539B"],NYR:["NY Rangers","#0038A8"],OTT:["Ottawa","#C52032"],PHI:["Philadelphia","#F74902"],PIT:["Pittsburgh","#a8892c"],SEA:["Seattle","#00807a"],SJS:["San Jose","#006D75"],STL:["St. Louis","#002F87"],TBL:["Tampa Bay","#002868"],TOR:["Toronto","#00205B"],UTA:["Utah","#4f7ea8"],VAN:["Vancouver","#00205B"],VGK:["Vegas","#8c7a4f"],WPG:["Winnipeg","#041E42"],WSH:["Washington","#C8102E"]};
+const NAT = {CAN:"Canada",USA:"United States",SWE:"Sweden",FIN:"Finland",RUS:"Russia",CZE:"Czechia",DEU:"Germany",CHE:"Switzerland",LVA:"Latvia",DNK:"Denmark",BLR:"Belarus"};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const store = { get(k,d){ try{ const v=localStorage.getItem("ga:"+k); return v==null?d:JSON.parse(v);}catch(e){return d} }, set(k,v){ try{localStorage.setItem("ga:"+k,JSON.stringify(v))}catch(e){} } };
+
+const state = {
+  season: store.get("season","2026-27"),
+  gfx: store.get("gfx", true),
+  hidden: store.get("hidden", []),
+  sort: {key:"gp", dir:-1},
+  q:"", team:"", catch:"", mingp:null
+};
+if(!SEASONS.includes(state.season)) state.season = "2026-27";
+
+const fmtSv = v => v==null ? "–" : v.toFixed(3).replace(/^0/,"");
+const fmtGaa = v => v==null ? "–" : v.toFixed(2);
+const teamOf = t => (t||"").split(",").pop();
+const color = t => (TEAMS[teamOf(t)]||["","#33465e"])[1];
+const initials = n => n.split(" ").map(p=>p[0]).filter(Boolean).slice(0,2).join("");
+const last = n => n.split(" ").slice(1).join(" ") || n;
+const age = born => { if(!born) return null; const b=new Date(born), now=new Date(DATA.asOf); let a=now.getFullYear()-b.getFullYear(); if(now < new Date(now.getFullYear(), b.getMonth(), b.getDate())) a--; return a; };
+const ht = i => i ? `${Math.floor(i/12)}′${i%12}″` : "–";
+const mono = (g,cls="") => `<span class="mono ${cls}" style="background:${color(g.team)}">${esc(initials(g.name))}</span>`;
+const byId = new Map(DATA.goalies.map(g=>[g.id,g]));
+
+function rows(){
+  return DATA.goalies.filter(g=>g.seasons[state.season]).map(g=>{
+    const s=g.seasons[state.season];
+    return {g, ...s, team:s.team, svp:s.svp, gaa:s.gaa};
+  });
+}
+function defaultMin(){ return state.season==="2026-27" ? 2 : 20; }
+function qualified(){
+  const m = state.mingp || defaultMin();
+  return rows().filter(r=>r.gp>=m);
+}
+function leagueSv(list){ const sv=list.reduce((a,r)=>a+(r.sv??0),0), sa=list.reduce((a,r)=>a+(r.sa??0),0); return sa? sv/sa : null; }
+
+/* ---------- season switch ---------- */
+function renderSeg(){
+  $("#seasonSeg").innerHTML = SEASONS.map(s=>`<button type="button" aria-pressed="${s===state.season}" data-s="${s}">${s}</button>`).join("");
+}
+$("#seasonSeg").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  state.season=b.dataset.s; state.mingp=null; store.set("season",state.season);
+  state.sort = state.season==="2024-25" && ["sa","sv","ga","gs"].includes(state.sort.key) ? {key:"gp",dir:-1} : state.sort;
+  renderAll();
+});
+
+/* ---------- hero ---------- */
+function renderHero(){
+  const all=rows(), q=qualified();
+  const live = state.season==="2026-27";
+  $("#heroEyebrow").textContent = live ? `${state.season} regular season · snapshot ${DATA.asOf}` : `${state.season} regular season · final`;
+  const shots = all.reduce((a,r)=>a+(r.sa||0),0);
+  $("#heroLede").innerHTML = `${all.length} goaltenders have played in ${state.season}${shots?`, facing ${shots.toLocaleString()} shots`:""}. Sort the full table, compare workloads, and open any goalie for bio, season history and a cross-check against QuantHockey and InGoal.`;
+  const best = [...q].sort((a,b)=>b.svp-a.svp)[0];
+  if(!best){ $("#spot").innerHTML=""; return; }
+  $("#spot").dataset.id=best.g.id;
+  $("#spot").innerHTML = `${mono(best.g,"lg")}<div><div class="tag">Save % leader · min ${state.mingp || defaultMin()} GP</div><div class="nm">${esc(best.g.name)}</div>
+    <div class="stats"><div class="kv"><b class="num">${fmtSv(best.svp)}</b><span>SV%</span></div><div class="kv"><b class="num">${fmtGaa(best.gaa)}</b><span>GAA</span></div><div class="kv"><b class="num">${best.w}-${best.l}-${best.otl}</b><span>Record</span></div><div class="kv"><b class="num">${best.gp}</b><span>GP</span></div></div></div>`;
+}
+$("#spot").addEventListener("click",()=>openGoalie(+$("#spot").dataset.id));
+$("#spot").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();openGoalie(+$("#spot").dataset.id);} });
+
+/* ---------- leaders ---------- */
+const LEADS = [
+  {k:"svp", t:"Save %", f:fmtSv, dir:-1},
+  {k:"gaa", t:"Goals-against avg", f:fmtGaa, dir:1},
+  {k:"w", t:"Wins", f:v=>v, dir:-1, all:true},
+  {k:"so", t:"Shutouts", f:v=>v, dir:-1, all:true},
+];
+function renderLeaders(){
+  const q=qualified(), all=rows();
+  $("#leadNote").textContent = `Rate stats need ${state.mingp || defaultMin()}+ GP · adjust with Min GP below`;
+  $("#leaders").innerHTML = LEADS.map(L=>{
+    const src = L.all? all : q;
+    const top = [...src].sort((a,b)=>(a[L.k]-b[L.k])*L.dir || b.gp-a.gp).slice(0,5);
+    if(!top.length) return `<div class="lead"><h3>${L.t}</h3><div class="note">No qualified goalies</div></div>`;
+    const [f,...rest]=top;
+    return `<div class="lead"><h3>${L.t}</h3>
+      <div class="first" data-id="${f.g.id}">${mono(f.g)}<div style="min-width:0"><div class="v num">${L.f(f[L.k])}</div><div class="n">${esc(f.g.name)}</div><div class="t">${esc(f.team)} · ${f.gp} GP</div></div></div>
+      <ol>${rest.map((r,i)=>`<li data-id="${r.g.id}"><span class="nm2"><span class="r">${i+2}</span>${esc(r.g.name)} <span class="note">${esc(teamOf(r.team))}</span></span><b class="num">${L.f(r[L.k])}</b></li>`).join("")}</ol></div>`;
+  }).join("");
+}
+$("#leaders").addEventListener("click",e=>{ const el=e.target.closest("[data-id]"); if(el) openGoalie(+el.dataset.id); });
+
+/* ---------- charts ---------- */
+const tip=$("#tip");
+function showTip(e,html){ tip.innerHTML=html; tip.hidden=false; const x=Math.min(e.clientX+14, innerWidth-tip.offsetWidth-8), y=Math.min(e.clientY+14, innerHeight-tip.offsetHeight-8); tip.style.left=x+"px"; tip.style.top=y+"px"; }
+function hideTip(){ tip.hidden=true; }
+function nice(min,max,n){ const span=max-min, step0=span/n, mag=Math.pow(10,Math.floor(Math.log10(step0))); const step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=step0); const ticks=[]; for(let v=Math.ceil(min/step)*step; v<=max+1e-9; v+=step) ticks.push(+v.toFixed(6)); return ticks; }
+
+function scatter(){
+  const el=$("#c-scatter"); const q=qualified();
+  if(q.length<2){ el.innerHTML=`<div class="empty">Not enough qualified goalies. Lower Min GP.</div>`; return; }
+  const W=1000,H=380,m={l:52,r:20,t:14,b:40};
+  const xs=q.map(r=>r.svp), ys=q.map(r=>r.gaa);
+  let x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+  const px=(x1-x0)*.08||.01, py=(y1-y0)*.08||.2; x0-=px;x1+=px;y0-=py;y1+=py;
+  const X=v=>m.l+(v-x0)/(x1-x0)*(W-m.l-m.r);
+  const Y=v=>m.t+(v-y0)/(y1-y0)*(H-m.t-m.b); // low GAA at top
+  const maxGp=Math.max(...q.map(r=>r.gp));
+  const R=gp=>4+10*Math.sqrt(gp/maxGp);
+  const xt=nice(x0,x1,6), yt=nice(y0,y1,5);
+  const lsv=leagueSv(q), lgaa=q.reduce((a,r)=>a+r.gaa*r.gp,0)/q.reduce((a,r)=>a+r.gp,0);
+  const label = [...q].sort((a,b)=>(b.svp-a.svp)).slice(0,3).concat([...q].sort((a,b)=>b.gaa-a.gaa).slice(0,2));
+  const labIds=new Set(label.map(r=>r.g.id));
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Scatter of save percentage against goals-against average">`;
+  s+=xt.map(v=>`<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="${m.t}" y2="${H-m.b}"/><text class="ax" x="${X(v)}" y="${H-m.b+18}" text-anchor="middle">${fmtSv(v)}</text>`).join("");
+  s+=yt.map(v=>`<line class="gl" x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${m.l-8}" y="${Y(v)+3}" text-anchor="end">${v.toFixed(2)}</text>`).join("");
+  if(lsv) s+=`<line x1="${X(lsv)}" x2="${X(lsv)}" y1="${m.t}" y2="${H-m.b}" stroke="var(--mute)" stroke-dasharray="4 4"/>`;
+  s+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(lgaa)}" y2="${Y(lgaa)}" stroke="var(--mute)" stroke-dasharray="4 4"/>`;
+  s+=`<text class="ax" x="${W-m.r}" y="${H-6}" text-anchor="end">SAVE % →</text><text class="ax" x="${m.l}" y="${H-6}">↑ LOWER GAA</text>`;
+  s+=[...q].sort((a,b)=>b.gp-a.gp).map(r=>`<circle class="dot" data-id="${r.g.id}" cx="${X(r.svp).toFixed(1)}" cy="${Y(r.gaa).toFixed(1)}" r="${R(r.gp).toFixed(1)}" fill="${color(r.team)}" fill-opacity=".85" stroke="var(--ice)" stroke-width="1"/>`).join("");
+  s+=label.filter((r,i,a)=>a.indexOf(r)===i).map(r=>`<text x="${X(r.svp)+R(r.gp)+4}" y="${Y(r.gaa)+4}" style="fill:var(--chalk);font-weight:600;font-size:11px;pointer-events:none">${esc(last(r.g.name))}</text>`).join("");
+  s+=`</svg>`;
+  el.innerHTML=s;
+}
+function hbars(id, list, val, fmt, opts={}){
+  const el=$("#"+id);
+  if(!list.length){ el.innerHTML=`<div class="empty">No qualified goalies yet.</div>`; return; }
+  const W=500,row=24,m={l:130,r:56,t:6,b:22},H=m.t+m.b+list.length*row;
+  const vmax=opts.max ?? Math.max(...list.map(val)), vmin=opts.min ?? 0;
+  const X=v=>m.l+(v-vmin)/(vmax-vmin)*(W-m.l-m.r);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  const ticks=nice(vmin,vmax,4);
+  s+=ticks.map(v=>`<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="${m.t}" y2="${H-m.b}"/><text class="ax" x="${X(v)}" y="${H-6}" text-anchor="middle">${opts.tick?opts.tick(v):v}</text>`).join("");
+  list.forEach((r,i)=>{
+    const y=m.t+i*row;
+    s+=`<g class="dot" data-id="${r.g.id}"><rect x="0" y="${y}" width="${W}" height="${row}" fill="transparent"/>
+      <text x="${m.l-8}" y="${y+row/2+4}" text-anchor="end" style="fill:var(--chalk)">${esc(last(r.g.name))} <tspan style="fill:var(--mute)">${esc(teamOf(r.team))}</tspan></text>`;
+    if(opts.stack){ s+=opts.stack(r,X,y+5,row-10); }
+    else s+=`<rect x="${m.l}" y="${y+5}" width="${Math.max(1,X(val(r))-m.l)}" height="${row-10}" rx="3" fill="${i===0?'var(--crease)':'#2b5b85'}"/>`;
+    s+=`<text x="${X(opts.end?opts.end(r):val(r))+6}" y="${y+row/2+4}" style="fill:var(--chalk);font-family:var(--f-data)">${fmt(r)}</text></g>`;
+  });
+  if(opts.ref!=null) s+=`<line x1="${X(opts.ref)}" x2="${X(opts.ref)}" y1="${m.t}" y2="${H-m.b}" stroke="var(--warn)" stroke-dasharray="3 3"/>`;
+  s+=`</svg>`;
+  el.innerHTML=s;
+}
+function svbar(){
+  const q=[...qualified()].sort((a,b)=>b.svp-a.svp).slice(0,12);
+  const lsv=leagueSv(qualified());
+  const lo=Math.floor((Math.min(...q.map(r=>r.svp), lsv??1)-.01)*100)/100;
+  hbars("c-svbar", q, r=>r.svp, r=>fmtSv(r.svp), {min:lo, max:Math.ceil(q[0]?.svp*100)/100||1, tick:fmtSv, ref:lsv});
+}
+function workload(){
+  const has = rows().some(r=>r.sa!=null);
+  if(!has){ $("#c-workload").innerHTML=`<div class="empty">Shot totals are not in the ${state.season} snapshot. Switch to 2025-26 or 2026-27.</div>`; return; }
+  const q=[...rows()].sort((a,b)=>b.sa-a.sa).slice(0,12);
+  hbars("c-workload", q, r=>r.sa, r=>r.sa.toLocaleString(), {
+    stack:(r,X,y,h)=>`<rect x="${X(0)}" y="${y}" width="${X(r.sv)-X(0)}" height="${h}" fill="#2b5b85"/><rect x="${X(r.sv)}" y="${y}" width="${Math.max(1,X(r.sa)-X(r.sv))}" height="${h}" fill="var(--bad)"/>`,
+    tick:v=>v>=1000?(v/1000)+"k":v
+  });
+}
+function renderCharts(){
+  const sec=$("#chartSec");
+  sec.hidden=!state.gfx;
+  if(!state.gfx) return;
+  document.querySelectorAll(".panel[data-chart]").forEach(p=>p.hidden=state.hidden.includes(p.dataset.chart));
+  const hid=state.hidden;
+  const names={scatter:"Save % vs goals-against",svbar:"Save % ladder",workload:"Workload"};
+  $("#collapsed").hidden=!hid.length;
+  $("#collapsed").innerHTML = hid.length ? `Hidden:` + hid.map(k=>`<button type="button" data-show="${k}">Show ${names[k]}</button>`).join("") : "";
+  $("#charts").hidden = hid.length===3;
+  if(!hid.includes("scatter")) scatter();
+  if(!hid.includes("svbar")) svbar();
+  if(!hid.includes("workload")) workload();
+}
+$("#chartSec").addEventListener("click",e=>{
+  const h=e.target.closest("[data-hide]"), s=e.target.closest("[data-show]");
+  if(h){ state.hidden=[...new Set([...state.hidden,h.dataset.hide])]; }
+  else if(s){ state.hidden=state.hidden.filter(k=>k!==s.dataset.show); }
+  else { const d=e.target.closest(".dot[data-id]"); if(d) openGoalie(+d.dataset.id); return; }
+  store.set("hidden",state.hidden); renderCharts();
+});
+$("#chartSec").addEventListener("mousemove",e=>{
+  const d=e.target.closest(".dot[data-id]"); if(!d){hideTip();return;}
+  const g=byId.get(+d.dataset.id), s=g.seasons[state.season];
+  showTip(e,`<b>${esc(g.name)}</b>${esc(s.team)} · ${s.gp} GP · ${s.w}-${s.l}-${s.otl}<br>SV% ${fmtSv(s.svp)} · GAA ${fmtGaa(s.gaa)}${s.sa?` · ${s.sa} shots`:""}`);
+});
+$("#chartSec").addEventListener("mouseleave",hideTip);
+$("#gfx").addEventListener("change",e=>{ state.gfx=e.target.checked; store.set("gfx",state.gfx); renderCharts(); renderTable(); });
+
+/* ---------- table ---------- */
+const COLS = [
+  {k:"name",t:"Goaltender",l:true,v:r=>r.g.name.split(" ").slice(-1)[0]},
+  {k:"team",t:"Team",l:true},
+  {k:"gp",t:"GP"},{k:"gs",t:"GS",full:true},
+  {k:"w",t:"W"},{k:"l",t:"L"},{k:"otl",t:"OTL"},
+  {k:"svp",t:"SV%"},{k:"gaa",t:"GAA"},
+  {k:"sa",t:"SA",full:true},{k:"sv",t:"Saves",full:true},{k:"ga",t:"GA",full:true},
+  {k:"so",t:"SO"},{k:"toi",t:"TOI",full:true},
+];
+function cols(){ const full=rows().some(r=>r.sa!=null); return COLS.filter(c=>!c.full||full); }
+function renderHead(){
+  $("#tbl thead tr").innerHTML = cols().map(c=>`<th class="${c.l?'l':''}" data-k="${c.k}" ${state.sort.key===c.k?`aria-sort="${state.sort.dir>0?'ascending':'descending'}"`:""} scope="col">${c.t}</th>`).join("");
+}
+$("#tbl thead").addEventListener("click",e=>{
+  const th=e.target.closest("th"); if(!th) return; const k=th.dataset.k;
+  state.sort = state.sort.key===k ? {key:k,dir:-state.sort.dir} : {key:k,dir:(["name","team","gaa","l","otl","ga"].includes(k)?1:-1)};
+  renderTable();
+});
+function renderTable(){
+  renderHead();
+  const m=state.mingp ?? 0;
+  let list=rows().filter(r=>r.gp>=m);
+  if(state.q){ const q=state.q.toLowerCase(); list=list.filter(r=>r.g.name.toLowerCase().includes(q)); }
+  if(state.team) list=list.filter(r=>r.team.split(",").includes(state.team));
+  if(state.catch) list=list.filter(r=>r.g.catches===state.catch);
+  const c=COLS.find(c=>c.k===state.sort.key)||COLS[2], get=c.v||(r=>r[c.k]);
+  list.sort((a,b)=>{ const x=get(a),y=get(b); return (typeof x==="string"? x.localeCompare(y): x-y)*state.sort.dir || b.gp-a.gp; });
+  const maxGp=Math.max(1,...rows().map(r=>r.gp));
+  const lsv=leagueSv(qualified());
+  $("#countNote").textContent=`${list.length} of ${rows().length} goalies · click a row for the full profile`;
+  const cs=cols();
+  $("#tbl tbody").innerHTML = list.length ? list.map(r=>`<tr data-id="${r.g.id}">${cs.map(col=>{
+    switch(col.k){
+      case "name": return `<td class="l"><div class="who">${mono(r.g,"sm")}<div><b>${esc(r.g.name)}</b><small>${r.g.catches==="R"?"Catches right":"Catches left"}${r.g.born?` · ${age(r.g.born)} yrs`:""}</small></div></div></td>`;
+      case "team": return `<td class="l"><span class="pill">${esc(r.team)}</span></td>`;
+      case "gp": return `<td class="num">${state.gfx?`<span class="bar"><i style="width:${Math.round(40*r.gp/maxGp)}px"></i>${r.gp}</span>`:r.gp}</td>`;
+      case "svp": return `<td class="num ${lsv&&r.gp>=defaultMin()? (r.svp>=lsv+.01?"good":r.svp<=lsv-.015?"bad":""):""}">${fmtSv(r.svp)}</td>`;
+      case "gaa": return `<td class="num">${fmtGaa(r.gaa)}</td>`;
+      case "toi": return `<td class="num">${Math.floor(r.toi/60).toLocaleString()}</td>`;
+      default: return `<td class="num">${r[col.k]??"–"}</td>`;
+    }}).join("")}</tr>`).join("") : `<tr><td colspan="${cs.length}" class="empty">No goalies match these filters.</td></tr>`;
+}
+$("#tbl tbody").addEventListener("click",e=>{ const tr=e.target.closest("tr[data-id]"); if(tr) openGoalie(+tr.dataset.id); });
+$("#q").addEventListener("input",e=>{state.q=e.target.value.trim(); renderTable();});
+$("#team").addEventListener("change",e=>{state.team=e.target.value; renderTable();});
+$("#catch").addEventListener("change",e=>{state.catch=e.target.value; renderTable();});
+$("#mingp").addEventListener("input",e=>{state.mingp=+e.target.value; $("#mingpV").textContent=e.target.value; renderHero(); renderLeaders(); renderCharts(); renderTable();});
+function fillTeams(){
+  $("#team").innerHTML = `<option value="">All teams</option>` + Object.keys(TEAMS).sort().map(t=>`<option value="${t}">${t} · ${TEAMS[t][0]}</option>`).join("");
+}
+
+/* ---------- profile drawer ---------- */
+let lastFocus=null;
+function trend(g){
+  const pts=SEASONS.slice().reverse().filter(s=>g.seasons[s]).map(s=>({s,v:g.seasons[s].svp,gp:g.seasons[s].gp}));
+  if(pts.length<2 || !state.gfx) return "";
+  const W=460,H=124,m={l:44,r:44,t:20,b:24};
+  const vs=pts.map(p=>p.v); let lo=Math.min(...vs,.88), hi=Math.max(...vs,.92); lo-=.005; hi+=.005;
+  const X=i=>m.l+i*(W-m.l-m.r)/(pts.length-1), Y=v=>m.t+(hi-v)/(hi-lo)*(H-m.t-m.b);
+  const ln=pts.map((p,i)=>`${i?"L":"M"}${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join("");
+  const area=ln+`L${X(pts.length-1)},${H-m.b}L${X(0)},${H-m.b}Z`;
+  return `<div class="dr-sec"><h4>Save % by season</h4><div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Save percentage trend">
+    ${nice(lo,hi,3).map(v=>`<line class="gl" x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${m.l-6}" y="${Y(v)+3}" text-anchor="end">${fmtSv(v)}</text>`).join("")}
+    <path d="${area}" fill="var(--crease-dim)"/><path d="${ln}" fill="none" stroke="var(--crease)" stroke-width="2"/>
+    ${pts.map((p,i)=>`<circle cx="${X(i)}" cy="${Y(p.v)}" r="${i===pts.length-1?5:3.5}" fill="${i===pts.length-1?'var(--crease)':'var(--boards)'}" stroke="var(--crease)" stroke-width="2"/><text x="${X(i)}" y="${Y(p.v)-10}" text-anchor="middle" style="fill:var(--chalk);font-family:var(--f-data);font-size:11px">${fmtSv(p.v)}</text><text class="ax" x="${X(i)}" y="${H-6}" text-anchor="middle">${p.s} · ${p.gp} GP</text>`).join("")}
+  </svg></div></div>`;
+}
+function openGoalie(id){
+  const g=byId.get(id); if(!g) return;
+  lastFocus=document.activeElement;
+  const cur=g.seasons["2026-27"];
+  const q=g.qh;
+  const xc = q ? `QuantHockey lists ${esc(g.name)} at <b>${q.gp} GP · ${q.gaa.toFixed(2)} GAA · ${fmtSv(q.svp)}</b> for 2026-27${cur?`, against the NHL feed's ${cur.gp} GP · ${fmtGaa(cur.gaa)} · ${fmtSv(cur.svp)}`:""}.${cur&&q.gp!==cur.gp?" The two were captured at different points in the week, so counts differ slightly.":""}` : `Not listed in the QuantHockey 2026-27 snapshot.`;
+  $("#drawer").innerHTML = `
+    <div class="dr-h">${mono(g,"lg")}<div><h2 id="drName">${esc(g.name)}</h2><div class="sub">${esc(TEAMS[teamOf(g.team)]?.[0]||g.team)} · ${g.catches==="R"?"Catches right":"Catches left"}</div></div><button class="close" id="drClose" aria-label="Close profile">×</button></div>
+    <div class="bio">
+      <div><span>Age</span><b>${g.born?age(g.born):"–"}</b></div>
+      <div><span>Born</span><b>${g.born||"–"}</b></div>
+      <div><span>Nation</span><b>${esc(NAT[g.nat]||g.nat||"–")}</b></div>
+      <div><span>Height</span><b>${ht(g.ht)}</b></div>
+      <div><span>Weight</span><b>${g.wt?g.wt+" lb":"–"}</b></div>
+      <div><span>Draft</span><b>${esc(g.draft||"–")}</b></div>
+    </div>
+    ${trend(g)}
+    <div class="dr-sec"><h4>Season by season</h4><div style="overflow-x:auto"><table class="mini"><thead><tr><th class="l">Season</th><th class="l">Team</th><th>GP</th><th>W-L-OTL</th><th>SV%</th><th>GAA</th><th>SO</th></tr></thead><tbody>
+      ${SEASONS.filter(s=>g.seasons[s]).map(s=>{const d=g.seasons[s];return `<tr><td class="l">${s}</td><td class="l">${esc(d.team)}</td><td class="num">${d.gp}</td><td class="num">${d.w}-${d.l}-${d.otl}</td><td class="num">${fmtSv(d.svp)}</td><td class="num">${fmtGaa(d.gaa)}</td><td class="num">${d.so}</td></tr>`}).join("")}
+    </tbody></table></div></div>
+    <div class="dr-sec"><h4>Source cross-check</h4><div class="xcheck">${xc}</div></div>
+    <div class="links"><a href="https://www.nhl.com/player/${g.id}" target="_blank" rel="noopener">NHL.com profile ↗</a><a href="${esc(g.ingoal)}" target="_blank" rel="noopener">InGoal Magazine ↗</a><a href="https://puckpedia.com/" target="_blank" rel="noopener">PuckPedia ↗</a></div>`;
+  $("#drawer").hidden=false; $("#scrim").hidden=false;
+  $("#drClose").focus();
+}
+function closeGoalie(){ $("#drawer").hidden=true; $("#scrim").hidden=true; lastFocus?.focus?.(); }
+$("#scrim").addEventListener("click",closeGoalie);
+$("#drawer").addEventListener("click",e=>{ if(e.target.id==="drClose") closeGoalie(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("#drawer").hidden) closeGoalie(); });
+
+/* ---------- footer ---------- */
+$("#foot").innerHTML = `
+  <div><h4>Data</h4><p>Season totals, records and bios come from the NHL's public stats feed (api.nhle.com), captured ${DATA.asOf}. 2026-27 is a live season, so its numbers are an early-season snapshot.</p></div>
+  <div><h4>Cross-checks</h4><p>QuantHockey's 2026-27 goalie table and InGoal Magazine's goaltender index were read on the same day. Each profile shows QuantHockey's line next to the NHL figures and links to InGoal.</p></div>
+  <div><h4>Not included</h4><p>PuckPedia's goalie and contract lists did not return any rows to a plain page read, so cap hits are not in this snapshot. Profiles link out to PuckPedia instead.</p></div>`;
+
+function renderAll(){
+  renderSeg();
+  const m=state.mingp ?? 0; $("#mingp").value=m; $("#mingpV").textContent=m;
+  renderHero(); renderLeaders(); renderCharts(); renderTable();
+}
+$("#gfx").checked=state.gfx;
+fillTeams();
+renderAll();
+let rz; addEventListener("resize",()=>{clearTimeout(rz); rz=setTimeout(renderCharts,150);});
+</script>
+
+</body>
+</html>
