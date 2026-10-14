@@ -1,0 +1,84 @@
+# Daily goalie bot: pulls MoneyPuck goalie stats and writes a goaltending news digest
+# at midnight US Eastern, then commits the results to the repository.
+name: Daily Goalie Bot
+
+on:
+  schedule:
+    # GitHub cron runs in UTC. Midnight Eastern is 04:00 UTC during daylight time (EDT)
+    # and 05:00 UTC during standard time (EST), so both are scheduled and the
+    # "Check the time" step below lets only the one that matches today's offset run.
+    - cron: "0 4 * * *"
+    - cron: "0 5 * * *"
+  workflow_dispatch: # "Run workflow" button in the Actions tab, for testing
+
+concurrency:
+  group: daily-goalie-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check the time
+        id: gate
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          offset=$(TZ=America/New_York date +%z)
+          if [ -z "$SCHEDULE" ] \
+             || { [ "$SCHEDULE" = "0 4 * * *" ] && [ "$offset" = "-0400" ]; } \
+             || { [ "$SCHEDULE" = "0 5 * * *" ] && [ "$offset" = "-0500" ]; }; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping: this trigger is not midnight Eastern today (offset $offset)."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pip install -r bot/requirements.txt
+
+      - name: Pull MoneyPuck goalie data
+        id: moneypuck
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python bot/fetch_moneypuck.py
+
+      - name: Write goaltending news digest
+        id: news
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python bot/news_digest.py
+
+      - name: Commit results
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/moneypuck news
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+          else
+            git commit -m "Daily goalie update for $(TZ=America/New_York date +%F)"
+            git push
+          fi
+
+      - name: Report failures
+        if: steps.moneypuck.outcome == 'failure' || steps.news.outcome == 'failure'
+        run: |
+          echo "MoneyPuck step: ${{ steps.moneypuck.outcome }}, news step: ${{ steps.news.outcome }}"
+          exit 1
