@@ -12,9 +12,9 @@ for detail.
 - `index.html` is the site (single page).
 - `data/` holds goalie stats: `goalies.json`, season CSVs (`s2025.csv`,
   `s2026.csv`, `s2027.csv`), `bios.csv`, `quanthockey.csv`.
-- `data/moneypuck/`, `data/nst/` and `news/` are written daily by the Daily Goalie Bot
-  (`bot/`, `.github/workflows/daily-goalie-bot.yml`). Credit MoneyPuck.com
-  and Natural Stat Trick wherever their data is shown.
+- `data/nst/` and `news/` are written daily by the Daily Goalie Bot
+  (`bot/`, `.github/workflows/daily-goalie-bot.yml`). Credit Natural Stat Trick
+  wherever its data is shown.
 
 ## How to behave
 - Answer questions about the code and data by reading the files, and cite
