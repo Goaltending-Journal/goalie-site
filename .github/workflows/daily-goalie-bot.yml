@@ -1,4 +1,4 @@
-# Daily goalie bot: pulls MoneyPuck goalie stats and writes a goaltending news digest
+# Daily goalie bot: pulls Natural Stat Trick goalie stats and writes a goaltending news digest
 # at midnight US Eastern, then commits the results to the repository.
 name: Daily Goalie Bot
 
@@ -50,11 +50,13 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: pip install -r bot/requirements.txt
 
-      - name: Pull MoneyPuck goalie data
-        id: moneypuck
+      - name: Pull Natural Stat Trick goalie data
+        id: nst
         if: steps.gate.outputs.run == 'true'
         continue-on-error: true
-        run: python bot/fetch_moneypuck.py
+        env:
+          NST_KEY: ${{ secrets.NST_KEY }}
+        run: python bot/fetch_nst.py
 
       - name: Write goaltending news digest
         id: news
@@ -69,7 +71,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/moneypuck news
+          git add data/nst news
           if git diff --cached --quiet; then
             echo "Nothing new to commit."
           else
@@ -78,7 +80,7 @@ jobs:
           fi
 
       - name: Report failures
-        if: steps.moneypuck.outcome == 'failure' || steps.news.outcome == 'failure'
+        if: steps.nst.outcome == 'failure' || steps.news.outcome == 'failure'
         run: |
-          echo "MoneyPuck step: ${{ steps.moneypuck.outcome }}, news step: ${{ steps.news.outcome }}"
+          echo "NST step: ${{ steps.nst.outcome }}, news step: ${{ steps.news.outcome }}"
           exit 1
